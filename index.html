@@ -53,6 +53,23 @@
         .control-row { display: flex; align-items: center; gap: 10px; }
         .control-row input[type="range"] { flex-grow: 1; }
         .control-row input[type="number"] { width: 100px; }
+        
+        .control-row-with-error {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .control-row-with-error input:first-child {
+            flex-grow: 1;
+        }
+        .control-row-with-error input:last-of-type {
+            width: 80px;
+        }
+        .control-row-with-error span {
+            font-size: 0.9em;
+            color: #555;
+        }
+
 
         #visualization-area { flex-grow: 1; position: relative; background-color: #ffffff; min-width: 0; display: flex; flex-direction: column; padding: 1.5rem; }
         #plot-container { flex-grow: 1; width: 100%; height: 100%; }
@@ -145,15 +162,27 @@
                 <h2>Experimental Parameters</h2>
                 <div class="control-group">
                     <label for="wire-length">Voltage Probe Distance (L) [mm]</label>
-                    <input type="number" id="wire-length" value="4">
+                    <div class="control-row-with-error">
+                        <input type="number" id="wire-length" value="4">
+                        <input type="number" id="esd-wire-length-ppm" value="5000" title="Uncertainty in ppm">
+                        <span>ppm</span>
+                    </div>
                 </div>
                 <div class="control-group">
                     <label for="wire-width">Wire Width (2b) [mm]</label>
-                    <input type="number" id="wire-width" value="0.1">
+                    <div class="control-row-with-error">
+                        <input type="number" id="wire-width" value="0.1">
+                        <input type="number" id="esd-wire-width-ppm" value="5000" title="Uncertainty in ppm">
+                        <span>ppm</span>
+                    </div>
                 </div>
                 <div class="control-group">
                     <label for="tcr">TCR (α) [1/K]</label>
-                    <input type="number" id="tcr" value="0.0035">
+                    <div class="control-row-with-error">
+                        <input type="number" id="tcr" value="0.0035">
+                        <input type="number" id="esd-tcr-ppm" value="5000" title="Uncertainty in ppm">
+                        <span>ppm</span>
+                    </div>
                 </div>
                  <div class="control-group">
                     <label for="thickness-substrate">Substrate Thickness (dₛ) [mm]</label>
@@ -194,7 +223,7 @@
             </div>
         </div>
         <footer>
-            <span>3-Omega Analyzer, v 2.5</span>
+            <span>3-Omega Analyzer, v 2.8</span>
             <span>NitaD, Univ Paris-Saclay</span>
         </footer>
     </div>
@@ -207,7 +236,7 @@
         let selectedDatasetIndex = 0;
 
         document.getElementById('file-upload').addEventListener('change', handleFileSelect, false);
-        ['wire-length', 'wire-width', 'tcr', 'thickness-substrate', 'fit-method'].forEach(id => {
+        ['wire-length', 'esd-wire-length-ppm', 'wire-width', 'esd-wire-width-ppm', 'tcr', 'esd-tcr-ppm', 'thickness-substrate', 'fit-method'].forEach(id => {
             document.getElementById(id)?.addEventListener('change', () => {
                  if (parsedFileContent.datasets.length > 0) {
                     analyzeAndDisplay();
@@ -330,17 +359,14 @@
                 for (const line of lines) {
                     const trimmedLine = line.trim();
                     if (trimmedLine.startsWith('--- > R0 :')) {
-                        // FIX 4.1: Parse all numbers on the R0 line
                         const r0_strings = trimmedLine.split(':')[1].trim().split(/\s+/);
                         const r0_values = r0_strings.map(parseFloat).filter(v => !isNaN(v));
                         
                         if (r0_values.length > 0) {
-                            // Calculate mean
                             const sum = r0_values.reduce((a, b) => a + b, 0);
                             const mean = sum / r0_values.length;
                             R0 = mean;
 
-                            // Calculate standard deviation
                             let std_dev = 0;
                             if (r0_values.length > 1) {
                                 const sq_diffs = r0_values.map(v => Math.pow(v - mean, 2));
@@ -348,7 +374,6 @@
                                 std_dev = Math.sqrt(sum_sq_diffs / (r0_values.length - 1));
                             }
                             
-                            // FIX 4.2: Apply 100 ppm floor to the error
                             const floor_esd = R0 * 100e-6; // 100 ppm of the mean value
                             esd_R0 = Math.max(std_dev, floor_esd);
                         }
@@ -401,10 +426,20 @@
         function analyzeAndDisplay() {
             if (parsedFileContent.datasets.length === 0) return;
             analysisResults = [];
+            
             const L = parseFloat(document.getElementById('wire-length').value) * 1e-3;
+            const esd_L_ppm = parseFloat(document.getElementById('esd-wire-length-ppm').value);
+            const rel_err_L = esd_L_ppm / 1e6;
+
             const two_b = parseFloat(document.getElementById('wire-width').value) * 1e-3;
+            const esd_two_b_ppm = parseFloat(document.getElementById('esd-wire-width-ppm').value);
+            const rel_err_two_b = esd_two_b_ppm / 1e6;
             const b = two_b / 2;
+
             const alpha_tcr = parseFloat(document.getElementById('tcr').value);
+            const esd_tcr_ppm = parseFloat(document.getElementById('esd-tcr-ppm').value);
+            const rel_err_tcr = esd_tcr_ppm / 1e6;
+
             const d_s = parseFloat(document.getElementById('thickness-substrate').value) * 1e-3;
             const fitMethod = document.getElementById('fit-method').value;
 
@@ -443,18 +478,43 @@
                 
                 const k = - (Math.pow(R0, 2) * alpha_tcr) / (4 * Math.PI * L * inPhaseFit.slope);
                 
-                // Full error propagation for k
                 const relative_err_slope_sq = Math.pow(inPhaseFit.esd_slope / inPhaseFit.slope, 2);
                 const relative_err_R0_sq = (R0 > 0 && esd_R0 > 0) ? 4 * Math.pow(esd_R0 / R0, 2) : 0;
-                const esd_k = Math.abs(k) * Math.sqrt(relative_err_slope_sq + relative_err_R0_sq);
+                const relative_err_tcr_sq = Math.pow(rel_err_tcr, 2);
+                const relative_err_L_sq = Math.pow(rel_err_L, 2);
+                const esd_k = Math.abs(k) * Math.sqrt(relative_err_slope_sq + relative_err_R0_sq + relative_err_tcr_sq + relative_err_L_sq);
 
-                const f_max_fit = d3.max(inPhaseFit.dataForFit, d => d.freq);
-                const alpha_diffusivity_m2s = f_max_fit * 100 * Math.PI * b * b;
+                let alpha_diffusivity_m2s = NaN;
+                let esd_alpha_diffusivity_m2s = NaN;
+
+                const S = inPhaseFit.slope;
+                const Ix = inPhaseFit.intercept;
+                const Iy = outOfPhaseFit.intercept;
+                const esd_S = inPhaseFit.esd_slope;
+                const esd_Ix = inPhaseFit.esd_intercept;
+                const esd_Iy = outOfPhaseFit.esd_intercept;
+
+                if (S !== 0 && Iy !== 0 && Ix !== 0) {
+                    const X = (-Iy - Ix) / S;
+                    const fc = (1 / (4 * Math.PI)) * Math.exp(X);
+                    alpha_diffusivity_m2s = 2 * Math.PI * fc * b * b;
+
+                    if (esd_S > 0 && esd_Ix > 0 && esd_Iy > 0) {
+                        const esd_X_sq = (1 / (S*S)) * (esd_Iy*esd_Iy + esd_Ix*esd_Ix) + Math.pow(X / S, 2) * (esd_S*esd_S);
+                        const rel_err_fc_sq = esd_X_sq;
+                        const rel_err_b_sq = 4 * Math.pow(rel_err_two_b, 2);
+                        
+                        esd_alpha_diffusivity_m2s = Math.abs(alpha_diffusivity_m2s) * Math.sqrt(rel_err_fc_sq + rel_err_b_sq);
+                    }
+                }
+                
                 const alpha_diffusivity_mm2s = alpha_diffusivity_m2s * 1e6;
+                const esd_alpha_diffusivity_mm2s = esd_alpha_diffusivity_m2s * 1e6;
 
                 analysisResults.push({
                     k, esd_k,
                     alpha: alpha_diffusivity_mm2s,
+                    esd_alpha: esd_alpha_diffusivity_mm2s,
                     R0, esd_R0, timestamp,
                     inPhaseFitParams: { slope: inPhaseFit.slope, intercept: inPhaseFit.intercept },
                     outOfPhaseFitParams: { slope: outOfPhaseFit.slope, intercept: outOfPhaseFit.intercept },
@@ -633,12 +693,18 @@
                 return;
             }
             const result = analysisResults[selectedDatasetIndex];
+
+            let alpha_text = `<strong>${result.alpha.toExponential(3)} mm²/s</strong>`;
+            if (!isNaN(result.esd_alpha) && result.esd_alpha > 0) {
+                alpha_text = `<strong>${result.alpha.toExponential(3)} ± ${result.esd_alpha.toExponential(1)} mm²/s</strong>`;
+            }
+
             cardContainer.innerHTML = `
                 <div class="results-card">
                     <h3>Dataset: ${formatTimestamp(result.timestamp)}</h3>
                     <p>Resistance (R₀): <strong>${result.R0.toFixed(2)} ± ${result.esd_R0.toExponential(1)} Ω</strong></p>
                     <p>Thermal Cond. (k): <strong>${result.k.toExponential(3)} ± ${result.esd_k.toExponential(1)} W/mK</strong></p>
-                    <p>Thermal Diff. (α): <strong>${result.alpha.toExponential(3)} mm²/s</strong></p>
+                    <p>Thermal Diff. (α): ${alpha_text}</p>
                 </div>
             `;
         }
@@ -886,10 +952,23 @@
                     let yPos_col1 = yPos;
                     let yPos_col2 = yPos;
 
+                    // FIX 7.1: Calculate and format parameter uncertainties for PDF report
+                    const L_val_mm = parseFloat(document.getElementById('wire-length').value);
+                    const L_ppm = parseFloat(document.getElementById('esd-wire-length-ppm').value);
+                    const L_esd_mm = L_val_mm * (L_ppm / 1e6);
+
+                    const two_b_val_mm = parseFloat(document.getElementById('wire-width').value);
+                    const two_b_ppm = parseFloat(document.getElementById('esd-wire-width-ppm').value);
+                    const two_b_esd_mm = two_b_val_mm * (two_b_ppm / 1e6);
+
+                    const tcr_val = parseFloat(document.getElementById('tcr').value);
+                    const tcr_ppm = parseFloat(document.getElementById('esd-tcr-ppm').value);
+                    const tcr_esd = tcr_val * (tcr_ppm / 1e6);
+                    
                     // Column 1: Parameters
-                    pdf.text(sanitizeForPDF(`Voltage Probe Distance (L): ${document.getElementById('wire-length').value} mm`), col1_x, yPos_col1); yPos_col1 += 6;
-                    pdf.text(sanitizeForPDF(`Wire Width (2b): ${document.getElementById('wire-width').value} mm`), col1_x, yPos_col1); yPos_col1 += 6;
-                    pdf.text(sanitizeForPDF(`TCR (α): ${document.getElementById('tcr').value} 1/K`), col1_x, yPos_col1); yPos_col1 += 6;
+                    pdf.text(sanitizeForPDF(`Voltage Probe Distance (L): ${L_val_mm.toFixed(3)} +/- ${L_esd_mm.toExponential(1)} mm`), col1_x, yPos_col1); yPos_col1 += 6;
+                    pdf.text(sanitizeForPDF(`Wire Width (2b): ${two_b_val_mm.toFixed(3)} +/- ${two_b_esd_mm.toExponential(1)} mm`), col1_x, yPos_col1); yPos_col1 += 6;
+                    pdf.text(sanitizeForPDF(`TCR (α): ${tcr_val.toExponential(3)} +/- ${tcr_esd.toExponential(1)} 1/K`), col1_x, yPos_col1); yPos_col1 += 6;
                     pdf.text(sanitizeForPDF(`Substrate Thickness (dₛ): ${document.getElementById('thickness-substrate').value} mm`), col1_x, yPos_col1); yPos_col1 += 6;
                     pdf.text(`Fitting Range: ${document.getElementById('fit-fmin').value} Hz to ${document.getElementById('fit-fmax').value} Hz`, col1_x, yPos_col1); yPos_col1 += 6;
                     pdf.text(`Fit Method: ${document.getElementById('fit-method').value}`, col1_x, yPos_col1); yPos_col1 += 6;
@@ -897,7 +976,13 @@
                     // Column 2: Results
                     pdf.text(sanitizeForPDF(`Resistance (R₀): ${result.R0.toFixed(2)} ± ${result.esd_R0.toExponential(1)} Ω`), col2_x, yPos_col2); yPos_col2 += 6;
                     pdf.text(sanitizeForPDF(`Thermal Conductivity (k): ${result.k.toExponential(3)} ± ${result.esd_k.toExponential(1)} W/mK`), col2_x, yPos_col2); yPos_col2 += 6;
-                    pdf.text(sanitizeForPDF(`Thermal Diffusivity (α): ${result.alpha.toExponential(3)} mm²/s`), col2_x, yPos_col2); yPos_col2 += 6;
+                    
+                    let alpha_text_pdf = sanitizeForPDF(`${result.alpha.toExponential(3)} mm²/s`);
+                    if (!isNaN(result.esd_alpha) && result.esd_alpha > 0) {
+                        alpha_text_pdf = sanitizeForPDF(`${result.alpha.toExponential(3)} ± ${result.esd_alpha.toExponential(1)} mm²/s`);
+                    }
+                    pdf.text(sanitizeForPDF(`Thermal Diffusivity (α): ${alpha_text_pdf}`), col2_x, yPos_col2); yPos_col2 += 6;
+
 
                     yPos = Math.max(yPos_col1, yPos_col2) + 5;
 
