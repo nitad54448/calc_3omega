@@ -9,19 +9,19 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         body { font-family: system-ui, sans-serif; margin: 0; background-color: #f0f0f0; color: #333; display: flex; height: 100vh; overflow: hidden; }
-        #app-container { 
-            display: flex; 
+        #app-container {
+            display: flex;
             flex-direction: column;
-            background-color: #ffffff; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
-            overflow: hidden; 
-            width: 98%; 
-            max-width: 1800px; 
+            background-color: #ffffff;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            overflow: hidden;
+            width: 98%;
+            max-width: 1800px;
             height: 100vh;
             margin: 0 auto;
         }
-        #main-content { 
-            display: flex; 
+        #main-content {
+            display: flex;
             flex: 1;
             min-height: 0;
         }
@@ -53,7 +53,7 @@
         .control-row { display: flex; align-items: center; gap: 10px; }
         .control-row input[type="range"] { flex-grow: 1; }
         .control-row input[type="number"] { width: 100px; }
-        
+
         .control-row-with-error {
             display: flex;
             gap: 8px;
@@ -72,45 +72,45 @@
 
         /* New File Input Styles */
         .file-upload-container {
-    position: relative;
-    display: flex;
-    align-items: center; /* alignement vertical */
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    background-color: white;
-    padding: 5px;
-    overflow: hidden;
-}
+            position: relative;
+            display: flex;
+            align-items: center; /* alignement vertical */
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: white;
+            padding: 5px;
+            overflow: hidden;
+        }
         .file-input-hidden {
             display: none;
         }
-.file-input-label {
-    background-color: #e0e0e0; 
-    color: #333;
-    /* Adjusted padding for better vertical alignment */
-    padding: 6px 12px;
-    border-radius: 4px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background-color 0.2s;
-}
+        .file-input-label {
+            background-color: #e0e0e0;
+            color: #333;
+            /* Adjusted padding for better vertical alignment */
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background-color 0.2s;
+        }
         .file-input-label:hover {
             background-color: #d0d0d0;
         }
-.file-name-display {
-    padding-left: 10px;
-    font-size: 0.8em; 
-    color: #555;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
+        .file-name-display {
+            padding-left: 10px;
+            font-size: 0.8em;
+            color: #555;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
 
 
         #visualization-area { flex-grow: 1; position: relative; background-color: #ffffff; min-width: 0; display: flex; flex-direction: column; padding: 1.5rem; }
         #plot-container { flex-grow: 1; width: 100%; height: 100%; }
         #plot-container svg { width: 100%; height: 100%; }
-        
+
         .results-card {
             background-color: #e9f5ff;
             border-left: 4px solid #007bff;
@@ -121,7 +121,7 @@
         }
         .results-card h3 { margin-top: 0; color: #004494; }
         .results-card p { margin: 5px 0; }
-        
+
         #dataset-controls {
             display: flex;
             gap: 10px;
@@ -162,14 +162,14 @@
         }
 
 
-        footer { 
-            padding: 8px 20px; 
-            background-color: #f9f9f9; 
-            border-top: 1px solid #e0e0e0; 
-            display: flex; 
-            justify-content: space-between; 
-            font-size: 0.8em; 
-            color: #666; 
+        footer {
+            padding: 8px 20px;
+            background-color: #f9f9f9;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8em;
+            color: #666;
             flex-shrink: 0;
         }
 
@@ -179,9 +179,16 @@
         .line { fill: none; }
         .dot { stroke-width: 1.5px; }
         .axis-label { font-size: 16px; fill: #333; font-weight: 500; }
-        .legend { font-size: 14px; }
+        .legend { font-size: 12px; }
         .fit-line-in-phase { stroke: #1E40AF; stroke-dasharray: 5, 5; stroke-width: 2px; }
         .fit-line-out-of-phase { stroke: #B45309; stroke-dasharray: 5, 5; stroke-width: 2px; }
+        /* MODIFIED: Styles for dual Y axes */
+        .axis-label.y-label-left { fill: #1E40AF; }
+        .axis-label.y-label-right { fill: #B45309; }
+        .axis.y-axis-left .tick text { fill: #1E40AF; }
+        .axis.y-axis-left path.domain { stroke: #1E40AF; }
+        .axis.y-axis-right .tick text { fill: #B45309; }
+        .axis.y-axis-right path.domain { stroke: #B45309; }
     </style>
 </head>
 <body>
@@ -189,16 +196,14 @@
         <div id="main-content">
             <div id="controls-panel">
                 <h1>3-Omega Data Analyzer</h1>
-                
+
                <div class="control-group">
     <label>Upload Data File</label>
     <div class="file-upload-container">
         <input type="file" id="file-upload" class="file-input-hidden">
         <label for="file-upload" class="file-input-label">
-            <!-- This text was changed -->
-            <span>Select file</span> 
+            <span>Select file</span>
         </label>
-        <!-- This text was changed -->
         <span id="file-name-display" class="file-name-display">No datafile</span>
     </div>
 </div>
@@ -340,7 +345,7 @@
                 el.min = minFreq;
                 el.max = maxFreq;
             });
-            
+
             fminSlider.step = (maxFreq - minFreq) / 200;
             fmaxSlider.step = (maxFreq - minFreq) / 200;
 
@@ -348,13 +353,13 @@
             fminValue.value = minFreq.toFixed(2);
             fmaxSlider.value = maxFreq;
             fmaxValue.value = maxFreq.toFixed(2);
-            
+
             const updateAnalysis = () => {
                 if (parsedFileContent.datasets.length > 0) {
                     analyzeAndDisplay();
                 }
             };
-            
+
             fminSlider.oninput = () => {
                 fminValue.value = parseFloat(fminSlider.value).toFixed(2);
                 if (parseFloat(fmaxSlider.value) < parseFloat(fminSlider.value)) {
@@ -401,7 +406,7 @@
 
             const datasets = [];
             const blocks = fileContent.split('***');
-            
+
             blocks.forEach(block => {
                 if (!block.trim()) return;
 
@@ -417,7 +422,7 @@
                     if (trimmedLine.startsWith('--- > R0 :')) {
                         const r0_strings = trimmedLine.split(':')[1].trim().split(/\s+/);
                         const r0_values = r0_strings.map(parseFloat).filter(v => !isNaN(v));
-                        
+
                         if (r0_values.length > 0) {
                             const sum = r0_values.reduce((a, b) => a + b, 0);
                             const mean = sum / r0_values.length;
@@ -429,7 +434,7 @@
                                 const sum_sq_diffs = sq_diffs.reduce((a, b) => a + b, 0);
                                 std_dev = Math.sqrt(sum_sq_diffs / (r0_values.length - 1));
                             }
-                            
+
                             const floor_esd = R0 * 100e-6; // 100 ppm of the mean value
                             esd_R0 = Math.max(std_dev, floor_esd);
                         }
@@ -454,7 +459,7 @@
                             const esdV3X = parseFloat(values[7]);
                             const v3y = parseFloat(values[8]);
                             const esdV3Y = parseFloat(values[9]);
-                            
+
                             const current_peak_mA = parseFloat(values[2]);
                             const current = (current_peak_mA * 1e-3) / Math.sqrt(2); // to Amps (RMS)
 
@@ -482,7 +487,7 @@
         function analyzeAndDisplay() {
             if (parsedFileContent.datasets.length === 0) return;
             analysisResults = [];
-            
+
             const L = parseFloat(document.getElementById('wire-length').value) * 1e-3;
             const esd_L_ppm = parseFloat(document.getElementById('esd-wire-length-ppm').value);
             const rel_err_L = esd_L_ppm / 1e6;
@@ -505,8 +510,8 @@
             if (isNaN(L) || isNaN(two_b) || isNaN(alpha_tcr) || isNaN(d_s) || isNaN(minFitFreq) || isNaN(maxFitFreq)) {
                 return;
             }
-            
-            const MIN_ESD_V = 5e-9; 
+
+            const MIN_ESD_V = 5e-9;
 
             parsedFileContent.datasets.forEach((datasetInfo) => {
                 const { data, R0, esd_R0, timestamp } = datasetInfo;
@@ -522,7 +527,7 @@
                 });
 
                 const dataForFit = data.filter(d => d.freq >= minFitFreq && d.freq <= maxFitFreq);
-                
+
                 let inPhaseFit, outOfPhaseFit;
                 if (fitMethod === 'robust') {
                     inPhaseFit = robustLinearRegression(dataForFit, 'ln_2omega', 'v3_in_phase_norm', 'esdV3X_norm');
@@ -531,9 +536,9 @@
                     inPhaseFit = weightedLinearRegression(dataForFit, 'ln_2omega', 'v3_in_phase_norm', 'esdV3X_norm');
                     outOfPhaseFit = weightedLinearRegression(dataForFit, 'ln_2omega', 'v3_out_of_phase_norm', 'esdV3Y_norm');
                 }
-                
+
                 const k = - (Math.pow(R0, 2) * alpha_tcr) / (4 * Math.PI * L * inPhaseFit.slope);
-                
+
                 const relative_err_slope_sq = Math.pow(inPhaseFit.esd_slope / inPhaseFit.slope, 2);
                 const relative_err_R0_sq = (R0 > 0 && esd_R0 > 0) ? 4 * Math.pow(esd_R0 / R0, 2) : 0;
                 const relative_err_tcr_sq = Math.pow(rel_err_tcr, 2);
@@ -559,11 +564,11 @@
                         const esd_X_sq = (1 / (S*S)) * (esd_Iy*esd_Iy + esd_Ix*esd_Ix) + Math.pow(X / S, 2) * (esd_S*esd_S);
                         const rel_err_fc_sq = esd_X_sq;
                         const rel_err_b_sq = 4 * Math.pow(rel_err_two_b, 2);
-                        
+
                         esd_alpha_diffusivity_m2s = Math.abs(alpha_diffusivity_m2s) * Math.sqrt(rel_err_fc_sq + rel_err_b_sq);
                     }
                 }
-                
+
                 const alpha_diffusivity_mm2s = alpha_diffusivity_m2s * 1e6;
                 const esd_alpha_diffusivity_mm2s = esd_alpha_diffusivity_m2s * 1e6;
 
@@ -582,7 +587,7 @@
             renderResultsUI();
             updatePlotForCurrentSelection();
         }
-        
+
         function weightedLinearRegression(data, xKey, yKey, sigmaKey) {
             const pointsToFit = data.filter(d => d[sigmaKey] > 0);
             const n = pointsToFit.length;
@@ -612,7 +617,7 @@
 
             return { slope, intercept, esd_slope, esd_intercept, dataForFit: pointsToFit };
         }
-        
+
         function robustLinearRegression(data, xKey, yKey, sigmaKey) {
             let pointsToFit = data.filter(d => d[sigmaKey] > 0);
             if (pointsToFit.length < 2) return { slope: 0, intercept: 0, esd_slope: 0, esd_intercept: 0, dataForFit: [] };
@@ -628,7 +633,7 @@
             for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
                 const residuals = pointsToFit.map(d => d[yKey] - (slope * d[xKey] + intercept));
                 const mad = d3.median(residuals.map(r => Math.abs(r - d3.median(residuals))));
-                
+
                 if (mad === 0) break;
 
                 const c = 4.685;
@@ -651,10 +656,10 @@
                     sum_wxy += w * x * y;
                     sum_wxx += w * x * x;
                 });
-                
+
                 const delta = sum_w * sum_wxx - sum_wx * sum_wx;
                 if (delta === 0) break;
-                
+
                 const newSlope = (sum_w * sum_wxy - sum_wx * sum_wy) / delta;
                 const newIntercept = (sum_wxx * sum_wy - sum_wx * sum_wxy) / delta;
 
@@ -666,7 +671,7 @@
                 slope = newSlope;
                 intercept = newIntercept;
             }
-            
+
             let sum_w = 0, sum_wxx = 0, sum_wx = 0;
             pointsToFit.forEach(d => {
                 const w = d.robustWeight || 0;
@@ -708,7 +713,7 @@
 
             const selector = document.createElement('select');
             selector.id = 'dataset-selector';
-            
+
             analysisResults.forEach((result, index) => {
                 const option = document.createElement('option');
                 option.value = index;
@@ -738,10 +743,10 @@
             const cardContainer = document.createElement('div');
             cardContainer.id = 'single-result-card-container';
             resultsContainer.appendChild(cardContainer);
-            
+
             displaySingleResult();
         }
-        
+
         function displaySingleResult() {
             const cardContainer = document.getElementById('single-result-card-container');
             if (!cardContainer || analysisResults.length === 0 || !analysisResults[selectedDatasetIndex]) {
@@ -764,7 +769,7 @@
                 </div>
             `;
         }
-        
+
         function deleteSelectedDataset() {
             if (parsedFileContent.datasets.length === 0) return;
 
@@ -779,7 +784,7 @@
                 clearPlot();
                 return;
             }
-            
+
             selectedDatasetIndex = Math.max(0, indexToDelete - 1);
             analyzeAndDisplay();
         }
@@ -789,7 +794,7 @@
                 clearPlot();
                 return;
             };
-            
+
             const selectedResult = analysisResults[selectedDatasetIndex];
             currentPlotData = {
                 allData: selectedResult.allData,
@@ -800,11 +805,13 @@
             drawPlot();
         }
 
-        const margin = { top: 60, right: 80, bottom: 120, left: 80 };
+        // MODIFIED: Increased right margin for the second Y-axis
+        const margin = { top: 60, right: 100, bottom: 120, left: 80 };
         const plotContainer = d3.select("#plot-container");
-        let svg, xScale, yScale, xAxisBottom, yAxis, xAxisTop, xScaleTop;
+        // MODIFIED: Variables for two Y-axes
+        let svg, xScale, yScaleLeft, yScaleRight, xAxisBottom, yAxisLeft, yAxisRight, xAxisTop, xScaleTop;
         let isPlotInitialized = false;
-        
+
         function clearPlot() {
             plotContainer.select("svg").remove();
             isPlotInitialized = false;
@@ -819,18 +826,24 @@
 
             svg = plotContainer.append("svg").attr("viewBox", `0 0 ${width} ${height}`);
             const plotArea = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
-            
+
             xScale = d3.scaleLinear();
             xScaleTop = d3.scaleLog();
-            yScale = d3.scaleLinear();
+            // MODIFIED: Define two Y scales
+            yScaleLeft = d3.scaleLinear();
+            yScaleRight = d3.scaleLinear();
 
             xAxisBottom = plotArea.append("g").attr("class", "axis x-axis-bottom");
             xAxisTop = plotArea.append("g").attr("class", "axis x-axis-top");
-            yAxis = plotArea.append("g").attr("class", "axis y-axis");
+            // MODIFIED: Define two Y axes
+            yAxisLeft = plotArea.append("g").attr("class", "axis y-axis-left");
+            yAxisRight = plotArea.append("g").attr("class", "axis y-axis-right");
 
             svg.append("text").attr("class", "axis-label").attr("id", "x-label-bottom").attr("text-anchor", "middle");
             svg.append("text").attr("class", "axis-label").attr("id", "x-label-top").attr("text-anchor", "middle");
-            svg.append("text").attr("class", "axis-label").attr("id", "y-label").attr("transform", "rotate(-90)").attr("text-anchor", "middle");
+            // MODIFIED: Define two Y axis labels
+            svg.append("text").attr("class", "axis-label y-label-left").attr("id", "y-label-left").attr("transform", "rotate(-90)").attr("text-anchor", "middle");
+            svg.append("text").attr("class", "axis-label y-label-right").attr("id", "y-label-right").attr("transform", "rotate(90)").attr("text-anchor", "middle");
 
             plotArea.append("g").attr("class", "plot-dots");
             plotArea.append("path").attr("class", "line fit-line-in-phase");
@@ -844,7 +857,7 @@
                 { label: "Out-of-Phase Fit", color: "#B45309" }
             ];
             legendItems.forEach((item, i) => {
-                const legendItem = legend.append("g").attr("transform", `translate(${i * 200}, 0)`);
+                const legendItem = legend.append("g").attr("transform", `translate(${i * 150}, 0)`);
                 legendItem.append("rect").attr("width", 15).attr("height", 15).style("fill", item.color);
                 legendItem.append("text").attr("x", 20).attr("y", 12).text(item.label);
             });
@@ -870,64 +883,82 @@
 
             xScale.domain(d3.extent(allData, d => d.ln_2omega)).range([0, plotWidth]);
             xScaleTop.domain(d3.extent(allData, d => d.freq)).range([0, plotWidth]);
-            
-            const yMin = d3.min(allData, d => Math.min(d.v3_in_phase_norm, d.v3_out_of_phase_norm));
-            const yMax = d3.max(allData, d => Math.max(d.v3_in_phase_norm, d.v3_out_of_phase_norm));
-            yScale.domain([yMin, yMax]).range([plotHeight, 0]).nice();
+
+            // MODIFIED: Set domains for each Y-axis independently
+            yScaleLeft.domain(d3.extent(allData, d => d.v3_in_phase_norm)).range([plotHeight, 0]).nice();
+            yScaleRight.domain(d3.extent(allData, d => d.v3_out_of_phase_norm)).range([plotHeight, 0]).nice();
 
             xAxisBottom.attr("transform", `translate(0,${plotHeight})`).call(d3.axisBottom(xScale));
             xAxisTop.call(d3.axisTop(xScaleTop).ticks(5, ".0e"));
-            yAxis.call(d3.axisLeft(yScale).tickFormat(d3.format(".2e")));
+            // MODIFIED: Render both Y-axes
+            yAxisLeft.call(d3.axisLeft(yScaleLeft).tickFormat(d3.format(".2e")));
+            yAxisRight.attr("transform", `translate(${plotWidth}, 0)`).call(d3.axisRight(yScaleRight).tickFormat(d3.format(".2e")));
 
             svg.select("#x-label-bottom").attr("x", margin.left + plotWidth / 2).attr("y", margin.top + plotHeight + 40);
             svg.select("#x-label-bottom").text("ln(2ω)");
             svg.select("#x-label-top").attr("x", margin.left + plotWidth / 2).attr("y", 35).text("Frequency (Hz)");
-            svg.select("#y-label").attr("y", 15).attr("x", 0 - (margin.top + plotHeight / 2)).text("V3 / I³rms (V/A³)");
-            svg.select(".legend").attr("transform", `translate(${(plotWidth - 750) / 2 + margin.left}, ${margin.top + plotHeight + 70})`);
-            
+            // MODIFIED: Position and set text for both Y-axis labels
+            svg.select("#y-label-left")
+                .attr("y", 15)
+                .attr("x", 0 - (margin.top + plotHeight / 2))
+                .text("V3/I³ In-Phase (V/A³)");
+            svg.select("#y-label-right")
+                .attr("y", -(width - 25))
+                .attr("x", (margin.top + plotHeight / 2))
+                .text("V3/I³ Out-of-Phase (V/A³)");
+
+const legend = svg.select(".legend");
+const legendWidth = legend.node().getBBox().width;
+legend.attr("transform", `translate(${(plotWidth - legendWidth) / 2 + margin.left}, ${margin.top + plotHeight + 70})`);
+
+
             const dotsGroup = svg.select(".plot-dots");
             dotsGroup.selectAll("*").remove();
 
+            // MODIFIED: Use yScaleLeft for in-phase data
             dotsGroup.selectAll(".dot-in-phase")
                 .data(allData)
                 .enter().append("circle")
                 .attr("class", "dot dot-in-phase")
                 .attr("cx", d => xScale(d.ln_2omega))
-                .attr("cy", d => yScale(d.v3_in_phase_norm))
+                .attr("cy", d => yScaleLeft(d.v3_in_phase_norm))
                 .attr("r", 4)
                 .style("fill", "#3B82F6");
 
+            // MODIFIED: Use yScaleRight for out-of-phase data
             dotsGroup.selectAll(".dot-out-of-phase")
                 .data(allData)
                 .enter().append("circle")
                 .attr("class", "dot dot-out-of-phase")
                 .attr("cx", d => xScale(d.ln_2omega))
-                .attr("cy", d => yScale(d.v3_out_of_phase_norm))
+                .attr("cy", d => yScaleRight(d.v3_out_of_phase_norm))
                 .attr("r", 4)
                 .style("fill", "#F59E0B");
-            
+
             const fitLineInPhase = svg.select(".fit-line-in-phase");
             const fitLineOutOfPhase = svg.select(".fit-line-out-of-phase");
 
             if(fitData && fitData.length > 1 && inPhaseFitParams) {
-                const line = d3.line()
+                // MODIFIED: Use yScaleLeft for in-phase fit line
+                const lineInPhaseFunc = d3.line()
                     .x(d => xScale(d.ln_2omega))
-                    .y(d => yScale(d.ln_2omega * inPhaseFitParams.slope + inPhaseFitParams.intercept));
-                fitLineInPhase.datum(fitData).attr("d", line);
+                    .y(d => yScaleLeft(d.ln_2omega * inPhaseFitParams.slope + inPhaseFitParams.intercept));
+                fitLineInPhase.datum(fitData).attr("d", lineInPhaseFunc);
             } else {
                 fitLineInPhase.attr("d", null);
             }
 
             if(fitData && fitData.length > 1 && outOfPhaseFitParams) {
-                 const line = d3.line()
+                // MODIFIED: Use yScaleRight for out-of-phase fit line
+                 const lineOutOfPhaseFunc = d3.line()
                     .x(d => xScale(d.ln_2omega))
-                    .y(d => yScale(d.ln_2omega * outOfPhaseFitParams.slope + outOfPhaseFitParams.intercept));
-                fitLineOutOfPhase.datum(fitData).attr("d", line);
+                    .y(d => yScaleRight(d.ln_2omega * outOfPhaseFitParams.slope + outOfPhaseFitParams.intercept));
+                fitLineOutOfPhase.datum(fitData).attr("d", lineOutOfPhaseFunc);
             } else {
                 fitLineOutOfPhase.attr("d", null);
             }
         }
-        
+
         function sanitizeForPDF(text) {
             return text.replace(/Ω/g, 'Ohm')
                        .replace(/α/g, 'alpha')
@@ -958,19 +989,19 @@
                 const footerText = document.querySelector('footer').textContent.trim().replace(/\s+/g, ' | ');
                 pdf.text(footerText, pageWidth / 2, yPos, { align: 'center' });
                 yPos += 12;
-                
+
                 pdf.setFontSize(12);
                 pdf.text("Data File Header Information", margin, yPos);
                 yPos += 6;
                 pdf.setLineWidth(0.2);
                 pdf.line(margin, yPos, pageWidth - margin, yPos);
                 yPos += 8;
-                
+
                 pdf.setFontSize(8).setFont('courier');
                 if (parsedFileContent.jsonHeader) {
                     const headerString = JSON.stringify(parsedFileContent.jsonHeader, null, 2);
                     const headerLines = pdf.splitTextToSize(headerString, pageWidth - 2 * margin);
-                    
+
                     for (const line of headerLines) {
                         if (yPos > pageHeight - margin) {
                             pdf.addPage();
@@ -1000,7 +1031,7 @@
                     pdf.setLineWidth(0.2);
                     pdf.line(margin, yPos, pageWidth - margin, yPos);
                     yPos += 8;
-                    
+
                     pdf.setFontSize(9);
 
                     const col1_x = margin;
@@ -1020,7 +1051,7 @@
                     const tcr_val = parseFloat(document.getElementById('tcr').value);
                     const tcr_ppm = parseFloat(document.getElementById('esd-tcr-ppm').value);
                     const tcr_esd = tcr_val * (tcr_ppm / 1e6);
-                    
+
                     // Column 1: Parameters
                     pdf.text(sanitizeForPDF(`Voltage Probe Distance (L): ${L_val_mm.toFixed(3)} +/- ${L_esd_mm.toExponential(1)} mm`), col1_x, yPos_col1); yPos_col1 += 6;
                     pdf.text(sanitizeForPDF(`Wire Width (2b): ${two_b_val_mm.toFixed(3)} +/- ${two_b_esd_mm.toExponential(1)} mm`), col1_x, yPos_col1); yPos_col1 += 6;
@@ -1032,7 +1063,7 @@
                     // Column 2: Results
                     pdf.text(sanitizeForPDF(`Resistance (R₀): ${result.R0.toFixed(2)} ± ${result.esd_R0.toExponential(1)} Ω`), col2_x, yPos_col2); yPos_col2 += 6;
                     pdf.text(sanitizeForPDF(`Thermal Conductivity (k): ${result.k.toExponential(3)} ± ${result.esd_k.toExponential(1)} W/mK`), col2_x, yPos_col2); yPos_col2 += 6;
-                    
+
                     let alpha_text_pdf = sanitizeForPDF(`${result.alpha.toExponential(3)} mm²/s`);
                     if (!isNaN(result.esd_alpha) && result.esd_alpha > 0) {
                         alpha_text_pdf = sanitizeForPDF(`${result.alpha.toExponential(3)} ± ${result.esd_alpha.toExponential(1)} mm²/s`);
@@ -1049,7 +1080,7 @@
                     const visArea = document.getElementById('visualization-area');
                     const canvas = await html2canvas(visArea, { scale: 2, backgroundColor: '#ffffff' });
                     const imgData = canvas.toDataURL('image/png');
-                    
+
                     const availableHeight = pageHeight - yPos - margin;
                     let imgWidth = pageWidth - 2 * margin;
                     let imgHeight = (canvas.height * imgWidth) / canvas.width;
@@ -1058,7 +1089,7 @@
                         imgHeight = availableHeight;
                         imgWidth = (canvas.width * imgHeight) / canvas.height;
                     }
-                    
+
                     const imgX = (pageWidth - imgWidth) / 2;
 
                     pdf.addImage(imgData, 'PNG', imgX, yPos, imgWidth, imgHeight);
@@ -1107,7 +1138,7 @@
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', stopResize);
         }
-        
+
         window.addEventListener('load', () => {
              new ResizeObserver(() => {
                 if (currentPlotData.allData) {
