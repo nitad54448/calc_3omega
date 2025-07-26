@@ -41,7 +41,7 @@
         #controls-panel h2 { font-size: 1.2em; margin-top: 25px; margin-bottom: 15px; color: #004494; border-bottom: 2px solid #e0e0e0; padding-bottom: 5px;}
         .control-group { margin-bottom: 18px; }
         .control-group label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9em; }
-        .control-group input[type="number"], .control-group input[type="file"], .control-group select {
+        .control-group input[type="number"], .control-group select {
             width: 100%;
             padding: 8px;
             border-radius: 4px;
@@ -69,6 +69,42 @@
             font-size: 0.9em;
             color: #555;
         }
+
+        /* New File Input Styles */
+        .file-upload-container {
+    position: relative;
+    display: flex;
+    align-items: center; /* alignement vertical */
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: white;
+    padding: 5px;
+    overflow: hidden;
+}
+        .file-input-hidden {
+            display: none;
+        }
+.file-input-label {
+    background-color: #e0e0e0; 
+    color: #333;
+    /* Adjusted padding for better vertical alignment */
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.2s;
+}
+        .file-input-label:hover {
+            background-color: #d0d0d0;
+        }
+.file-name-display {
+    padding-left: 10px;
+    font-size: 0.8em; 
+    color: #555;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
 
         #visualization-area { flex-grow: 1; position: relative; background-color: #ffffff; min-width: 0; display: flex; flex-direction: column; padding: 1.5rem; }
@@ -154,10 +190,19 @@
             <div id="controls-panel">
                 <h1>3-Omega Data Analyzer</h1>
                 
-                <div class="control-group">
-                    <label for="file-upload">Upload Data File (.dat)</label>
-                    <input type="file" id="file-upload">
-                </div>
+               <div class="control-group">
+    <label>Upload Data File</label>
+    <div class="file-upload-container">
+        <input type="file" id="file-upload" class="file-input-hidden">
+        <label for="file-upload" class="file-input-label">
+            <!-- This text was changed -->
+            <span>Select file</span> 
+        </label>
+        <!-- This text was changed -->
+        <span id="file-name-display" class="file-name-display">No datafile</span>
+    </div>
+</div>
+
 
                 <h2>Experimental Parameters</h2>
                 <div class="control-group">
@@ -248,7 +293,15 @@
 
         function handleFileSelect(event) {
             const file = event.target.files[0];
-            if (!file) return;
+            const fileNameDisplay = document.getElementById('file-name-display');
+
+            if (!file) {
+                fileNameDisplay.textContent = 'Aucun fichier sélectionné';
+                return;
+            }
+
+            fileNameDisplay.textContent = file.name; // Update the display with the file name
+
             const reader = new FileReader();
             reader.onload = function(e) {
                 const contents = e.target.result;
@@ -268,6 +321,9 @@
                 }
             };
             reader.readAsText(file);
+            // By clearing the value, we allow the 'change' event to fire
+            // even if the same file is selected again. The UI is handled by the span.
+            event.target.value = null;
         }
 
         function setupFittingSliders() {
