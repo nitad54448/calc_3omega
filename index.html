@@ -26,8 +26,8 @@
             min-height: 0;
         }
         #controls-panel {
-            width: 420px;
-            min-width: 350px;
+            width: 350px;
+            min-width: 200px;
             max-width: 600px;
             flex-shrink: 0;
             padding: 20px;
@@ -179,7 +179,7 @@
         .line { fill: none; }
         .dot { stroke-width: 1.5px; }
         .axis-label { font-size: 16px; fill: #333; font-weight: 500; }
-        .legend { font-size: 12px; }
+        .legend { font-size: 14px; }
         .fit-line-in-phase { stroke: #1E40AF; stroke-dasharray: 5, 5; stroke-width: 2px; }
         .fit-line-out-of-phase { stroke: #B45309; stroke-dasharray: 5, 5; stroke-width: 2px; }
         /* MODIFIED: Styles for dual Y axes */
@@ -450,7 +450,7 @@
 
                     if (isDataSection) {
                         const values = trimmedLine.split(/\s+/);
-                        if (values.length >= 10) {
+                        if (values.length >= 11) { // MODIFIED: Check for the 'Data_Valid?' column
                             if (isNaN(firstTimeSec)) {
                                 firstTimeSec = parseFloat(values[0]);
                             }
@@ -459,6 +459,7 @@
                             const esdV3X = parseFloat(values[7]);
                             const v3y = parseFloat(values[8]);
                             const esdV3Y = parseFloat(values[9]);
+                            const isValid = parseFloat(values[10]) === 1; // MODIFIED: Parse the 'Data_Valid?' flag
 
                             const current_peak_mA = parseFloat(values[2]);
                             const current = (current_peak_mA * 1e-3) / Math.sqrt(2); // to Amps (RMS)
@@ -467,7 +468,8 @@
                                 data.push({
                                     freq, v3_in_phase: v3x, v3_out_of_phase: v3y,
                                     esdV3X, esdV3Y, current,
-                                    ln_2omega: Math.log(2 * 2 * Math.PI * freq)
+                                    ln_2omega: Math.log(2 * 2 * Math.PI * freq),
+                                    isValid // MODIFIED: Store the validity flag
                                 });
                             }
                         }
@@ -525,8 +527,9 @@
                     d.esdV3X_norm = effective_esdV3X / I_cubed;
                     d.esdV3Y_norm = effective_esdV3Y / I_cubed;
                 });
-
-                const dataForFit = data.filter(d => d.freq >= minFitFreq && d.freq <= maxFitFreq);
+                
+                // MODIFIED: Exclude invalid points from fitting
+                const dataForFit = data.filter(d => d.freq >= minFitFreq && d.freq <= maxFitFreq && d.isValid);
 
                 let inPhaseFit, outOfPhaseFit;
                 if (fitMethod === 'robust') {
@@ -851,13 +854,14 @@
 
             const legend = svg.append("g").attr("class", "legend");
             const legendItems = [
-                { label: "V3/I³rms In-Phase", color: "#3B82F6" },
-                { label: "V3/I³rms Out-of-Phase", color: "#F59E0B" },
+                { label: "V3_X/I³ rms", color: "#3B82F6" },
+                { label: "V3_Y/I³ rms", color: "#F59E0B" },
                 { label: "In-Phase Fit", color: "#1E40AF" },
-                { label: "Out-of-Phase Fit", color: "#B45309" }
+                { label: "Out-of-Phase Fit", color: "#B45309" },
+                { label: "Invalid Data", color: "#cccccc" } 
             ];
             legendItems.forEach((item, i) => {
-                const legendItem = legend.append("g").attr("transform", `translate(${i * 150}, 0)`);
+                const legendItem = legend.append("g").attr("transform", `translate(${i * 140}, 0)`); // MODIFIED: adjusted spacing
                 legendItem.append("rect").attr("width", 15).attr("height", 15).style("fill", item.color);
                 legendItem.append("text").attr("x", 20).attr("y", 12).text(item.label);
             });
@@ -907,33 +911,36 @@
                 .attr("x", (margin.top + plotHeight / 2))
                 .text("V3/I³ Out-of-Phase (V/A³)");
 
-const legend = svg.select(".legend");
-const legendWidth = legend.node().getBBox().width;
-legend.attr("transform", `translate(${(plotWidth - legendWidth) / 2 + margin.left}, ${margin.top + plotHeight + 70})`);
+            const legend = svg.select(".legend");
+            const legendWidth = legend.node().getBBox().width;
+            legend.attr("transform", `translate(${(plotWidth - legendWidth) / 2 + margin.left}, ${margin.top + plotHeight + 70})`);
 
 
             const dotsGroup = svg.select(".plot-dots");
             dotsGroup.selectAll("*").remove();
 
-            // MODIFIED: Use yScaleLeft for in-phase data
+            // MODIFIED: Use yScaleLeft for in-phase data and style based on validity
             dotsGroup.selectAll(".dot-in-phase")
                 .data(allData)
                 .enter().append("circle")
                 .attr("class", "dot dot-in-phase")
                 .attr("cx", d => xScale(d.ln_2omega))
                 .attr("cy", d => yScaleLeft(d.v3_in_phase_norm))
-                .attr("r", 4)
-                .style("fill", "#3B82F6");
+                .attr("r", d => d.isValid ? 4 : 2)
+                .style("fill", d => d.isValid ? "#3B82F6" : "#cccccc")
+                .style("opacity", d => d.isValid ? 1.0 : 0.7);
 
-            // MODIFIED: Use yScaleRight for out-of-phase data
+
+            // MODIFIED: Use yScaleRight for out-of-phase data and style based on validity
             dotsGroup.selectAll(".dot-out-of-phase")
                 .data(allData)
                 .enter().append("circle")
                 .attr("class", "dot dot-out-of-phase")
                 .attr("cx", d => xScale(d.ln_2omega))
                 .attr("cy", d => yScaleRight(d.v3_out_of_phase_norm))
-                .attr("r", 4)
-                .style("fill", "#F59E0B");
+                .attr("r", d => d.isValid ? 4 : 2)
+                .style("fill", d => d.isValid ? "#F59E0B" : "#cccccc")
+                .style("opacity", d => d.isValid ? 1.0 : 0.7);
 
             const fitLineInPhase = svg.select(".fit-line-in-phase");
             const fitLineOutOfPhase = svg.select(".fit-line-out-of-phase");
@@ -971,6 +978,9 @@ legend.attr("transform", `translate(${(plotWidth - legendWidth) / 2 + margin.lef
             const btn = document.getElementById('save-report-btn');
             btn.textContent = 'Generating...';
             btn.disabled = true;
+
+            // MODIFICATION: Save the original index to restore it later
+            const originalSelectedDatasetIndex = selectedDatasetIndex;
 
             try {
                 const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
@@ -1039,7 +1049,6 @@ legend.attr("transform", `translate(${(plotWidth - legendWidth) / 2 + margin.lef
                     let yPos_col1 = yPos;
                     let yPos_col2 = yPos;
 
-                    // FIX 7.1: Calculate and format parameter uncertainties for PDF report
                     const L_val_mm = parseFloat(document.getElementById('wire-length').value);
                     const L_ppm = parseFloat(document.getElementById('esd-wire-length-ppm').value);
                     const L_esd_mm = L_val_mm * (L_ppm / 1e6);
@@ -1052,7 +1061,6 @@ legend.attr("transform", `translate(${(plotWidth - legendWidth) / 2 + margin.lef
                     const tcr_ppm = parseFloat(document.getElementById('esd-tcr-ppm').value);
                     const tcr_esd = tcr_val * (tcr_ppm / 1e6);
 
-                    // Column 1: Parameters
                     pdf.text(sanitizeForPDF(`Voltage Probe Distance (L): ${L_val_mm.toFixed(3)} +/- ${L_esd_mm.toExponential(1)} mm`), col1_x, yPos_col1); yPos_col1 += 6;
                     pdf.text(sanitizeForPDF(`Wire Width (2b): ${two_b_val_mm.toFixed(3)} +/- ${two_b_esd_mm.toExponential(1)} mm`), col1_x, yPos_col1); yPos_col1 += 6;
                     pdf.text(sanitizeForPDF(`TCR (α): ${tcr_val.toExponential(3)} +/- ${tcr_esd.toExponential(1)} 1/K`), col1_x, yPos_col1); yPos_col1 += 6;
@@ -1060,7 +1068,6 @@ legend.attr("transform", `translate(${(plotWidth - legendWidth) / 2 + margin.lef
                     pdf.text(`Fitting Range: ${document.getElementById('fit-fmin').value} Hz to ${document.getElementById('fit-fmax').value} Hz`, col1_x, yPos_col1); yPos_col1 += 6;
                     pdf.text(`Fit Method: ${document.getElementById('fit-method').value}`, col1_x, yPos_col1); yPos_col1 += 6;
 
-                    // Column 2: Results
                     pdf.text(sanitizeForPDF(`Resistance (R₀): ${result.R0.toFixed(2)} ± ${result.esd_R0.toExponential(1)} Ω`), col2_x, yPos_col2); yPos_col2 += 6;
                     pdf.text(sanitizeForPDF(`Thermal Conductivity (k): ${result.k.toExponential(3)} ± ${result.esd_k.toExponential(1)} W/mK`), col2_x, yPos_col2); yPos_col2 += 6;
 
@@ -1070,12 +1077,13 @@ legend.attr("transform", `translate(${(plotWidth - legendWidth) / 2 + margin.lef
                     }
                     pdf.text(sanitizeForPDF(`Thermal Diffusivity (α): ${alpha_text_pdf}`), col2_x, yPos_col2); yPos_col2 += 6;
 
-
                     yPos = Math.max(yPos_col1, yPos_col2) + 5;
 
+                    // MODIFICATION: Update the global index so the correct plot is drawn
+                    selectedDatasetIndex = i;
                     document.getElementById('dataset-selector').value = i;
                     updatePlotForCurrentSelection();
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    await new Promise(resolve => setTimeout(resolve, 100)); // Wait for render
 
                     const visArea = document.getElementById('visualization-area');
                     const canvas = await html2canvas(visArea, { scale: 2, backgroundColor: '#ffffff' });
@@ -1091,7 +1099,6 @@ legend.attr("transform", `translate(${(plotWidth - legendWidth) / 2 + margin.lef
                     }
 
                     const imgX = (pageWidth - imgWidth) / 2;
-
                     pdf.addImage(imgData, 'PNG', imgX, yPos, imgWidth, imgHeight);
                 }
 
@@ -1106,6 +1113,8 @@ legend.attr("transform", `translate(${(plotWidth - legendWidth) / 2 + margin.lef
                 resultsContainer.prepend(errorDiv);
 
             } finally {
+                // MODIFICATION: Restore the original state
+                selectedDatasetIndex = originalSelectedDatasetIndex;
                 document.getElementById('dataset-selector').value = selectedDatasetIndex;
                 updatePlotForCurrentSelection();
                 btn.textContent = 'Save Report';
