@@ -1063,17 +1063,17 @@
                 const margin = 15;
                 let yPos = margin;
 
-                pdf.setFontSize(18);
+                pdf.setFontSize(20);
                 pdf.text("3-Omega Analysis", pageWidth / 2, yPos, { align: 'center' });
                 yPos += 8;
-                pdf.setFontSize(10);
-                pdf.text(`Program used github.com/nitad54448/calc_3omega. Report generated on: ${new Date().toLocaleString()}`, pageWidth / 2, yPos, { align: 'center' });
+                pdf.setFontSize(14);
+                pdf.text(`Github.com/nitad54448/calc_3omega. Report generated on: ${new Date().toLocaleString()}`, pageWidth / 2, yPos, { align: 'center' });
                 yPos += 8;
-                const footerText = document.querySelector('footer').textContent.trim().replace(/\s+/g, ' | ');
+                const footerText = document.querySelector('footer').textContent.trim().replace(/\s+/g, ' ');
                 pdf.text(footerText, pageWidth / 2, yPos, { align: 'center' });
                 yPos += 12;
 
-                pdf.setFontSize(12);
+                pdf.setFontSize(10);
                 pdf.text("Data File Header Information", margin, yPos);
                 yPos += 6;
                 pdf.setLineWidth(0.2);
