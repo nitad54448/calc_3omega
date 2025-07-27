@@ -271,7 +271,7 @@
             </div>
         </div>
         <footer>
-            <span>3-Omega Analyzer, v 3.1</span>
+            <span>3-Omega_Analyzer v3.1</span>
             <span>NitaD, Univ Paris-Saclay</span>
         </footer>
     </div>
@@ -1064,10 +1064,10 @@
                 let yPos = margin;
 
                 pdf.setFontSize(18);
-                pdf.text("3-Omega Analysis Report", pageWidth / 2, yPos, { align: 'center' });
+                pdf.text("3-Omega Analysis", pageWidth / 2, yPos, { align: 'center' });
                 yPos += 8;
                 pdf.setFontSize(10);
-                pdf.text(`Generated on: ${new Date().toLocaleString()}`, pageWidth / 2, yPos, { align: 'center' });
+                pdf.text(`Program used github.com/nitad54448/calc_3omega. Report generated on: ${new Date().toLocaleString()}`, pageWidth / 2, yPos, { align: 'center' });
                 yPos += 8;
                 const footerText = document.querySelector('footer').textContent.trim().replace(/\s+/g, ' | ');
                 pdf.text(footerText, pageWidth / 2, yPos, { align: 'center' });
