@@ -70,11 +70,10 @@
             color: #555;
         }
 
-        /* New File Input Styles */
         .file-upload-container {
             position: relative;
             display: flex;
-            align-items: center; /* alignement vertical */
+            align-items: center;
             border: 1px solid #ccc;
             border-radius: 4px;
             background-color: white;
@@ -87,7 +86,6 @@
         .file-input-label {
             background-color: #e0e0e0;
             color: #333;
-            /* Adjusted padding for better vertical alignment */
             padding: 6px 12px;
             border-radius: 4px;
             cursor: pointer;
@@ -182,7 +180,7 @@
         .legend { font-size: 14px; }
         .fit-line-in-phase { stroke: #1E40AF; stroke-dasharray: 5, 5; stroke-width: 2px; }
         .fit-line-out-of-phase { stroke: #B45309; stroke-dasharray: 5, 5; stroke-width: 2px; }
-        /* MODIFIED: Styles for dual Y axes */
+        .fit-marker { stroke: red; stroke-width: 1.5px; stroke-dasharray: 4, 4; }
         .axis-label.y-label-left { fill: #1E40AF; }
         .axis-label.y-label-right { fill: #B45309; }
         .axis.y-axis-left .tick text { fill: #1E40AF; }
@@ -198,15 +196,15 @@
                 <h1>3-Omega Data Analyzer</h1>
 
                <div class="control-group">
-    <label>Upload Data File</label>
-    <div class="file-upload-container">
-        <input type="file" id="file-upload" class="file-input-hidden">
-        <label for="file-upload" class="file-input-label">
-            <span>Select file</span>
-        </label>
-        <span id="file-name-display" class="file-name-display">No datafile</span>
-    </div>
-</div>
+                    <label>Upload Data File</label>
+                    <div class="file-upload-container">
+                        <input type="file" id="file-upload" class="file-input-hidden">
+                        <label for="file-upload" class="file-input-label">
+                            <span>Select file</span>
+                        </label>
+                        <span id="file-name-display" class="file-name-display">No datafile</span>
+                    </div>
+                </div>
 
 
                 <h2>Experimental Parameters</h2>
@@ -273,7 +271,7 @@
             </div>
         </div>
         <footer>
-            <span>3-Omega Analyzer, v 2.8</span>
+            <span>3-Omega Analyzer, v 3.1</span>
             <span>NitaD, Univ Paris-Saclay</span>
         </footer>
     </div>
@@ -305,14 +303,38 @@
                 return;
             }
 
-            fileNameDisplay.textContent = file.name; // Update the display with the file name
+            fileNameDisplay.textContent = file.name;
 
             const reader = new FileReader();
             reader.onload = function(e) {
                 const contents = e.target.result;
                 parsedFileContent = parseData(contents);
                 if (parsedFileContent.datasets.length > 0) {
+                    // Calculate TCR from the entire file's data
+                    let tcr_result = { value: "unknown", esd: "" };
+                    const tcr_data = parsedFileContent.datasets
+                        .map(ds => ({ x: ds.avg_temp, y: ds.R0, sigma: ds.esd_R0 }))
+                        .filter(d => !isNaN(d.x) && !isNaN(d.y) && d.x > 0);
+
+                    const uniqueTemps = new Set(tcr_data.map(d => d.x));
+                    if (tcr_data.length >= 2 && uniqueTemps.size >= 2) {
+                        const fit = weightedLinearRegression(tcr_data, 'x', 'y', 'sigma');
+                        if (fit.slope !== 0) {
+                            const avg_R = d3.mean(tcr_data, d => d.y);
+                            const tcr_val = (1 / avg_R) * fit.slope;
+                            
+                            const rel_err_slope_sq = Math.pow(fit.esd_slope / fit.slope, 2);
+                            const std_dev_R = d3.deviation(tcr_data, d => d.y) || 0;
+                            const rel_err_R_sq = Math.pow(std_dev_R / avg_R, 2);
+                            const tcr_esd = Math.abs(tcr_val) * Math.sqrt(rel_err_slope_sq + rel_err_R_sq);
+                            
+                            tcr_result = { value: tcr_val, esd: tcr_esd };
+                        }
+                    }
+                    parsedFileContent.calculated_tcr = tcr_result;
+                    
                     selectedDatasetIndex = 0;
+                    analysisResults = [];
                     document.getElementById('fitting-controls').classList.remove('hidden');
                     document.getElementById('save-report-btn').classList.remove('hidden');
                     setupFittingSliders();
@@ -326,32 +348,39 @@
                 }
             };
             reader.readAsText(file);
-            // By clearing the value, we allow the 'change' event to fire
-            // even if the same file is selected again. The UI is handled by the span.
             event.target.value = null;
         }
 
         function setupFittingSliders() {
             const allFreqs = parsedFileContent.datasets.flatMap(ds => ds.data.map(d => d.freq));
-            const minFreq = Math.min(...allFreqs);
+            const minFreq = Math.max(0.01, Math.min(...allFreqs)); // Prevent log(0)
             const maxFreq = Math.max(...allFreqs);
+
+            const logMin = Math.log(minFreq);
+            const logMax = Math.log(maxFreq);
 
             const fminSlider = document.getElementById('fit-fmin-slider');
             const fminValue = document.getElementById('fit-fmin');
             const fmaxSlider = document.getElementById('fit-fmax-slider');
             const fmaxValue = document.getElementById('fit-fmax');
 
-            [fminSlider, fminValue, fmaxSlider, fmaxValue].forEach(el => {
-                el.min = minFreq;
-                el.max = maxFreq;
-            });
+            fminValue.min = minFreq.toFixed(2);
+            fminValue.max = maxFreq.toFixed(2);
+            fmaxValue.min = minFreq.toFixed(2);
+            fmaxValue.max = maxFreq.toFixed(2);
 
-            fminSlider.step = (maxFreq - minFreq) / 200;
-            fmaxSlider.step = (maxFreq - minFreq) / 200;
+            fminSlider.min = logMin;
+            fminSlider.max = logMax;
+            fmaxSlider.min = logMin;
+            fmaxSlider.max = logMax;
+            
+            const step = (logMax - logMin) / 200;
+            fminSlider.step = step;
+            fmaxSlider.step = step;
 
-            fminSlider.value = minFreq;
+            fminSlider.value = logMin;
             fminValue.value = minFreq.toFixed(2);
-            fmaxSlider.value = maxFreq;
+            fmaxSlider.value = logMax;
             fmaxValue.value = maxFreq.toFixed(2);
 
             const updateAnalysis = () => {
@@ -361,27 +390,37 @@
             };
 
             fminSlider.oninput = () => {
-                fminValue.value = parseFloat(fminSlider.value).toFixed(2);
-                if (parseFloat(fmaxSlider.value) < parseFloat(fminSlider.value)) {
-                    fmaxSlider.value = fminSlider.value;
-                    fmaxValue.value = fminValue.value;
+                const logVal = parseFloat(fminSlider.value);
+                fminValue.value = Math.exp(logVal).toFixed(2);
+                if (parseFloat(fmaxSlider.value) < logVal) {
+                    fmaxSlider.value = logVal;
+                    fmaxValue.value = Math.exp(logVal).toFixed(2);
                 }
                 updateAnalysis();
             };
             fmaxSlider.oninput = () => {
-                fmaxValue.value = parseFloat(fmaxSlider.value).toFixed(2);
-                if (parseFloat(fmaxSlider.value) < parseFloat(fminSlider.value)) {
-                    fminSlider.value = fmaxSlider.value;
-                    fminValue.value = fmaxValue.value;
+                const logVal = parseFloat(fmaxSlider.value);
+                fmaxValue.value = Math.exp(logVal).toFixed(2);
+                if (logVal < parseFloat(fminSlider.value)) {
+                    fminSlider.value = logVal;
+                    fminValue.value = Math.exp(logVal).toFixed(2);
                 }
                 updateAnalysis();
             };
             fminValue.onchange = () => {
-                fminSlider.value = fminValue.value;
+                let val = parseFloat(fminValue.value);
+                if (val < minFreq) val = minFreq;
+                if (val > maxFreq) val = maxFreq;
+                fminValue.value = val.toFixed(2);
+                fminSlider.value = Math.log(val);
                 updateAnalysis();
             };
             fmaxValue.onchange = () => {
-                fmaxSlider.value = fmaxValue.value;
+                let val = parseFloat(fmaxValue.value);
+                if (val < minFreq) val = minFreq;
+                if (val > maxFreq) val = maxFreq;
+                fmaxValue.value = val.toFixed(2);
+                fmaxSlider.value = Math.log(val);
                 updateAnalysis();
             };
         }
@@ -412,6 +451,7 @@
 
                 const lines = block.split('\n');
                 const data = [];
+                let temperatures = [];
                 let isDataSection = false;
                 let R0 = NaN;
                 let esd_R0 = 0;
@@ -434,8 +474,7 @@
                                 const sum_sq_diffs = sq_diffs.reduce((a, b) => a + b, 0);
                                 std_dev = Math.sqrt(sum_sq_diffs / (r0_values.length - 1));
                             }
-
-                            const floor_esd = R0 * 100e-6; // 100 ppm of the mean value
+                            const floor_esd = R0 * 100e-6;
                             esd_R0 = Math.max(std_dev, floor_esd);
                         }
                     }
@@ -450,45 +489,53 @@
 
                     if (isDataSection) {
                         const values = trimmedLine.split(/\s+/);
-                        if (values.length >= 11) { // MODIFIED: Check for the 'Data_Valid?' column
+                        if (values.length >= 11) {
                             if (isNaN(firstTimeSec)) {
                                 firstTimeSec = parseFloat(values[0]);
                             }
+                            const temp = parseFloat(values[1]);
+                            if (!isNaN(temp)) temperatures.push(temp);
+
                             const freq = parseFloat(values[3]);
                             const v3x = parseFloat(values[6]);
                             const esdV3X = parseFloat(values[7]);
                             const v3y = parseFloat(values[8]);
                             const esdV3Y = parseFloat(values[9]);
-                            const isValid = parseFloat(values[10]) === 1; // MODIFIED: Parse the 'Data_Valid?' flag
+                            const isValid = parseFloat(values[10]) === 1;
 
                             const current_peak_mA = parseFloat(values[2]);
-                            const current = (current_peak_mA * 1e-3) / Math.sqrt(2); // to Amps (RMS)
+                            const current = (current_peak_mA * 1e-3) / Math.sqrt(2);
 
                             if (!isNaN(freq) && freq > 0 && !isNaN(v3x) && !isNaN(v3y) && !isNaN(current) && current > 0) {
                                 data.push({
                                     freq, v3_in_phase: v3x, v3_out_of_phase: v3y,
                                     esdV3X, esdV3Y, current,
                                     ln_2omega: Math.log(2 * 2 * Math.PI * freq),
-                                    isValid // MODIFIED: Store the validity flag
+                                    isValid
                                 });
                             }
                         }
                     }
                 }
                 if (data.length > 0 && !isNaN(R0)) {
+                    let avg_temp = NaN;
+                    const validTemps = temperatures.filter(t => t > 0);
+                    if (validTemps.length > 0) {
+                        avg_temp = validTemps.reduce((a, b) => a + b, 0) / validTemps.length;
+                    }
+
                     let timestamp = new Date();
                     if (startTime && !isNaN(firstTimeSec)) {
                         timestamp = new Date(startTime.getTime() + firstTimeSec * 1000);
                     }
-                    datasets.push({ data, R0, esd_R0, timestamp });
+                    datasets.push({ data, R0, esd_R0, timestamp, avg_temp });
                 }
             });
             return { datasets, jsonHeader };
         }
-
+        
         function analyzeAndDisplay() {
             if (parsedFileContent.datasets.length === 0) return;
-            analysisResults = [];
 
             const L = parseFloat(document.getElementById('wire-length').value) * 1e-3;
             const esd_L_ppm = parseFloat(document.getElementById('esd-wire-length-ppm').value);
@@ -506,30 +553,51 @@
             const d_s = parseFloat(document.getElementById('thickness-substrate').value) * 1e-3;
             const fitMethod = document.getElementById('fit-method').value;
 
-            const minFitFreq = parseFloat(document.getElementById('fit-fmin').value);
-            const maxFitFreq = parseFloat(document.getElementById('fit-fmax').value);
-
-            if (isNaN(L) || isNaN(two_b) || isNaN(alpha_tcr) || isNaN(d_s) || isNaN(minFitFreq) || isNaN(maxFitFreq)) {
+            const minFitFreqFromUI = parseFloat(document.getElementById('fit-fmin').value);
+            const maxFitFreqFromUI = parseFloat(document.getElementById('fit-fmax').value);
+            
+            if (isNaN(L) || isNaN(two_b) || isNaN(alpha_tcr) || isNaN(d_s) || isNaN(minFitFreqFromUI) || isNaN(maxFitFreqFromUI)) {
                 return;
             }
 
             const MIN_ESD_V = 5e-9;
 
-            parsedFileContent.datasets.forEach((datasetInfo) => {
-                const { data, R0, esd_R0, timestamp } = datasetInfo;
+            if (analysisResults.length !== parsedFileContent.datasets.length) {
+                const allFreqs = parsedFileContent.datasets.flatMap(ds => ds.data.map(d => d.freq));
+                const globalMinFreq = Math.max(0.01, Math.min(...allFreqs));
+                const globalMaxFreq = Math.max(...allFreqs);
 
-                data.forEach(d => {
-                    const I_cubed = Math.pow(d.current, 3);
-                    d.v3_in_phase_norm = d.v3_in_phase / I_cubed;
-                    d.v3_out_of_phase_norm = d.v3_out_of_phase / I_cubed;
-                    const effective_esdV3X = (d.esdV3X > MIN_ESD_V) ? d.esdV3X : MIN_ESD_V;
-                    const effective_esdV3Y = (d.esdV3Y > MIN_ESD_V) ? d.esdV3Y : MIN_ESD_V;
-                    d.esdV3X_norm = effective_esdV3X / I_cubed;
-                    d.esdV3Y_norm = effective_esdV3Y / I_cubed;
+                analysisResults = parsedFileContent.datasets.map(dataset => {
+                    const processedData = dataset.data.map(d => {
+                        const I_cubed = Math.pow(d.current, 3);
+                        const effective_esdV3X = (d.esdV3X > MIN_ESD_V) ? d.esdV3X : MIN_ESD_V;
+                        const effective_esdV3Y = (d.esdV3Y > MIN_ESD_V) ? d.esdV3Y : MIN_ESD_V;
+                        return {
+                            ...d,
+                            v3_in_phase_norm: d.v3_in_phase / I_cubed,
+                            v3_out_of_phase_norm: d.v3_out_of_phase / I_cubed,
+                            esdV3X_norm: effective_esdV3X / I_cubed,
+                            esdV3Y_norm: effective_esdV3Y / I_cubed,
+                        };
+                    });
+                    return {
+                        ...dataset,
+                        allData: processedData,
+                        minFitFreq: globalMinFreq,
+                        maxFitFreq: globalMaxFreq,
+                    };
                 });
-                
-                // MODIFIED: Exclude invalid points from fitting
-                const dataForFit = data.filter(d => d.freq >= minFitFreq && d.freq <= maxFitFreq && d.isValid);
+            }
+
+            if (analysisResults[selectedDatasetIndex]) {
+                analysisResults[selectedDatasetIndex].minFitFreq = minFitFreqFromUI;
+                analysisResults[selectedDatasetIndex].maxFitFreq = maxFitFreqFromUI;
+            }
+            
+            analysisResults.forEach(result => {
+                const { allData, R0, esd_R0, minFitFreq, maxFitFreq } = result;
+
+                const dataForFit = allData.filter(d => d.freq >= minFitFreq && d.freq <= maxFitFreq && d.isValid);
 
                 let inPhaseFit, outOfPhaseFit;
                 if (fitMethod === 'robust') {
@@ -541,7 +609,6 @@
                 }
 
                 const k = - (Math.pow(R0, 2) * alpha_tcr) / (4 * Math.PI * L * inPhaseFit.slope);
-
                 const relative_err_slope_sq = Math.pow(inPhaseFit.esd_slope / inPhaseFit.slope, 2);
                 const relative_err_R0_sq = (R0 > 0 && esd_R0 > 0) ? 4 * Math.pow(esd_R0 / R0, 2) : 0;
                 const relative_err_tcr_sq = Math.pow(rel_err_tcr, 2);
@@ -575,18 +642,15 @@
                 const alpha_diffusivity_mm2s = alpha_diffusivity_m2s * 1e6;
                 const esd_alpha_diffusivity_mm2s = esd_alpha_diffusivity_m2s * 1e6;
 
-                analysisResults.push({
-                    k, esd_k,
-                    alpha: alpha_diffusivity_mm2s,
-                    esd_alpha: esd_alpha_diffusivity_mm2s,
-                    R0, esd_R0, timestamp,
-                    inPhaseFitParams: { slope: inPhaseFit.slope, intercept: inPhaseFit.intercept },
-                    outOfPhaseFitParams: { slope: outOfPhaseFit.slope, intercept: outOfPhaseFit.intercept },
-                    allData: data,
-                    fitData: dataForFit
-                });
+                result.k = k;
+                result.esd_k = esd_k;
+                result.alpha = alpha_diffusivity_mm2s;
+                result.esd_alpha = esd_alpha_diffusivity_mm2s;
+                result.inPhaseFitParams = { slope: inPhaseFit.slope, intercept: inPhaseFit.intercept };
+                result.outOfPhaseFitParams = { slope: outOfPhaseFit.slope, intercept: outOfPhaseFit.intercept };
+                result.fitData = dataForFit;
             });
-
+            
             renderResultsUI();
             updatePlotForCurrentSelection();
         }
@@ -702,6 +766,23 @@
             return `${YYYY}-${MM}-${DD} ${hh}:${mm}:${ss}`;
         }
 
+        function updateFittingUI() {
+            if (!analysisResults[selectedDatasetIndex]) return;
+
+            const { minFitFreq, maxFitFreq } = analysisResults[selectedDatasetIndex];
+
+            const fminSlider = document.getElementById('fit-fmin-slider');
+            const fminValue = document.getElementById('fit-fmin');
+            const fmaxSlider = document.getElementById('fit-fmax-slider');
+            const fmaxValue = document.getElementById('fit-fmax');
+
+            fminValue.value = minFitFreq.toFixed(2);
+            fmaxValue.value = maxFitFreq.toFixed(2);
+            
+            fminSlider.value = Math.log(minFitFreq);
+            fmaxSlider.value = Math.log(maxFitFreq);
+        }
+
         function renderResultsUI() {
             const resultsContainer = document.getElementById('results-container');
             resultsContainer.innerHTML = '<h2>Analysis Results</h2>';
@@ -729,13 +810,14 @@
 
             selector.addEventListener('change', (e) => {
                 selectedDatasetIndex = parseInt(e.target.value);
+                updateFittingUI();
                 displaySingleResult();
                 updatePlotForCurrentSelection();
             });
 
             const deleteBtn = document.createElement('button');
             deleteBtn.id = 'delete-dataset-btn';
-            deleteBtn.innerHTML = '&#x1F5D1;'; // Trash can icon
+            deleteBtn.innerHTML = '&#x1F5D1;';
             deleteBtn.title = "Delete Selected Dataset";
             deleteBtn.onclick = deleteSelectedDataset;
 
@@ -753,7 +835,7 @@
         function displaySingleResult() {
             const cardContainer = document.getElementById('single-result-card-container');
             if (!cardContainer || analysisResults.length === 0 || !analysisResults[selectedDatasetIndex]) {
-                cardContainer.innerHTML = '';
+                if(cardContainer) cardContainer.innerHTML = '';
                 return;
             }
             const result = analysisResults[selectedDatasetIndex];
@@ -763,10 +845,21 @@
                 alpha_text = `<strong>${result.alpha.toExponential(3)} ± ${result.esd_alpha.toExponential(1)} mm²/s</strong>`;
             }
 
+            let tcr_line = '';
+            if (parsedFileContent.calculated_tcr) {
+                const tcr = parsedFileContent.calculated_tcr;
+                if (tcr.value !== "unknown" && !isNaN(tcr.value)) {
+                    tcr_line = `<p>Calculated TCR: <strong>${tcr.value.toExponential(2)} ± ${tcr.esd.toExponential(1)} 1/K</strong></p>`;
+                } else {
+                    tcr_line = `<p>Calculated TCR: <strong>unknown</strong></p>`;
+                }
+            }
+
             cardContainer.innerHTML = `
                 <div class="results-card">
                     <h3>Dataset: ${formatTimestamp(result.timestamp)}</h3>
                     <p>Resistance (R₀): <strong>${result.R0.toFixed(2)} ± ${result.esd_R0.toExponential(1)} Ω</strong></p>
+                    ${tcr_line}
                     <p>Thermal Cond. (k): <strong>${result.k.toExponential(3)} ± ${result.esd_k.toExponential(1)} W/mK</strong></p>
                     <p>Thermal Diff. (α): ${alpha_text}</p>
                 </div>
@@ -774,12 +867,13 @@
         }
 
         function deleteSelectedDataset() {
-            if (parsedFileContent.datasets.length === 0) return;
+            if (analysisResults.length === 0) return;
 
             const indexToDelete = selectedDatasetIndex;
             parsedFileContent.datasets.splice(indexToDelete, 1);
+            analysisResults.splice(indexToDelete, 1);
 
-            if (parsedFileContent.datasets.length === 0) {
+            if (analysisResults.length === 0) {
                 selectedDatasetIndex = 0;
                 document.getElementById('results-container').innerHTML = '';
                 document.getElementById('fitting-controls').classList.add('hidden');
@@ -789,7 +883,10 @@
             }
 
             selectedDatasetIndex = Math.max(0, indexToDelete - 1);
-            analyzeAndDisplay();
+            
+            renderResultsUI();
+            updateFittingUI();
+            updatePlotForCurrentSelection();
         }
 
         function updatePlotForCurrentSelection() {
@@ -798,20 +895,12 @@
                 return;
             };
 
-            const selectedResult = analysisResults[selectedDatasetIndex];
-            currentPlotData = {
-                allData: selectedResult.allData,
-                fitData: selectedResult.fitData,
-                inPhaseFitParams: selectedResult.inPhaseFitParams,
-                outOfPhaseFitParams: selectedResult.outOfPhaseFitParams
-            };
+            currentPlotData = analysisResults[selectedDatasetIndex];
             drawPlot();
         }
 
-        // MODIFIED: Increased right margin for the second Y-axis
         const margin = { top: 60, right: 100, bottom: 120, left: 80 };
         const plotContainer = d3.select("#plot-container");
-        // MODIFIED: Variables for two Y-axes
         let svg, xScale, yScaleLeft, yScaleRight, xAxisBottom, yAxisLeft, yAxisRight, xAxisTop, xScaleTop;
         let isPlotInitialized = false;
 
@@ -832,23 +921,22 @@
 
             xScale = d3.scaleLinear();
             xScaleTop = d3.scaleLog();
-            // MODIFIED: Define two Y scales
             yScaleLeft = d3.scaleLinear();
             yScaleRight = d3.scaleLinear();
 
             xAxisBottom = plotArea.append("g").attr("class", "axis x-axis-bottom");
             xAxisTop = plotArea.append("g").attr("class", "axis x-axis-top");
-            // MODIFIED: Define two Y axes
             yAxisLeft = plotArea.append("g").attr("class", "axis y-axis-left");
             yAxisRight = plotArea.append("g").attr("class", "axis y-axis-right");
 
             svg.append("text").attr("class", "axis-label").attr("id", "x-label-bottom").attr("text-anchor", "middle");
             svg.append("text").attr("class", "axis-label").attr("id", "x-label-top").attr("text-anchor", "middle");
-            // MODIFIED: Define two Y axis labels
             svg.append("text").attr("class", "axis-label y-label-left").attr("id", "y-label-left").attr("transform", "rotate(-90)").attr("text-anchor", "middle");
             svg.append("text").attr("class", "axis-label y-label-right").attr("id", "y-label-right").attr("transform", "rotate(90)").attr("text-anchor", "middle");
 
             plotArea.append("g").attr("class", "plot-dots");
+            plotArea.append("line").attr("class", "fit-marker").attr("id", "fmin-marker");
+            plotArea.append("line").attr("class", "fit-marker").attr("id", "fmax-marker");
             plotArea.append("path").attr("class", "line fit-line-in-phase");
             plotArea.append("path").attr("class", "line fit-line-out-of-phase");
 
@@ -861,7 +949,7 @@
                 { label: "Invalid Data", color: "#cccccc" } 
             ];
             legendItems.forEach((item, i) => {
-                const legendItem = legend.append("g").attr("transform", `translate(${i * 140}, 0)`); // MODIFIED: adjusted spacing
+                const legendItem = legend.append("g").attr("transform", `translate(${i * 140}, 0)`);
                 legendItem.append("rect").attr("width", 15).attr("height", 15).style("fill", item.color);
                 legendItem.append("text").attr("x", 20).attr("y", 12).text(item.label);
             });
@@ -869,7 +957,8 @@
         }
 
         function drawPlot() {
-            const { allData, fitData, inPhaseFitParams, outOfPhaseFitParams } = currentPlotData;
+            const { allData, fitData, inPhaseFitParams, outOfPhaseFitParams, minFitFreq, maxFitFreq } = currentPlotData;
+            
             if (!allData || allData.length === 0) {
                 clearPlot();
                 return;
@@ -887,79 +976,65 @@
 
             xScale.domain(d3.extent(allData, d => d.ln_2omega)).range([0, plotWidth]);
             xScaleTop.domain(d3.extent(allData, d => d.freq)).range([0, plotWidth]);
-
-            // MODIFIED: Set domains for each Y-axis independently
             yScaleLeft.domain(d3.extent(allData, d => d.v3_in_phase_norm)).range([plotHeight, 0]).nice();
             yScaleRight.domain(d3.extent(allData, d => d.v3_out_of_phase_norm)).range([plotHeight, 0]).nice();
 
             xAxisBottom.attr("transform", `translate(0,${plotHeight})`).call(d3.axisBottom(xScale));
             xAxisTop.call(d3.axisTop(xScaleTop).ticks(5, ".0e"));
-            // MODIFIED: Render both Y-axes
             yAxisLeft.call(d3.axisLeft(yScaleLeft).tickFormat(d3.format(".2e")));
             yAxisRight.attr("transform", `translate(${plotWidth}, 0)`).call(d3.axisRight(yScaleRight).tickFormat(d3.format(".2e")));
 
-            svg.select("#x-label-bottom").attr("x", margin.left + plotWidth / 2).attr("y", margin.top + plotHeight + 40);
-            svg.select("#x-label-bottom").text("ln(2ω)");
+            svg.select("#x-label-bottom").attr("x", margin.left + plotWidth / 2).attr("y", margin.top + plotHeight + 40).text("ln(2ω)");
             svg.select("#x-label-top").attr("x", margin.left + plotWidth / 2).attr("y", 35).text("Frequency (Hz)");
-            // MODIFIED: Position and set text for both Y-axis labels
-            svg.select("#y-label-left")
-                .attr("y", 15)
-                .attr("x", 0 - (margin.top + plotHeight / 2))
-                .text("V3/I³ In-Phase (V/A³)");
-            svg.select("#y-label-right")
-                .attr("y", -(width - 25))
-                .attr("x", (margin.top + plotHeight / 2))
-                .text("V3/I³ Out-of-Phase (V/A³)");
+            svg.select("#y-label-left").attr("y", 15).attr("x", 0 - (margin.top + plotHeight / 2)).text("V3/I³ In-Phase (V/A³)");
+            svg.select("#y-label-right").attr("y", -(width - 25)).attr("x", (margin.top + plotHeight / 2)).text("V3/I³ Out-of-Phase (V/A³)");
 
             const legend = svg.select(".legend");
             const legendWidth = legend.node().getBBox().width;
             legend.attr("transform", `translate(${(plotWidth - legendWidth) / 2 + margin.left}, ${margin.top + plotHeight + 70})`);
+            
+            const fminMarker = svg.select("#fmin-marker");
+            const fmaxMarker = svg.select("#fmax-marker");
 
+            if (fitData && fitData.length > 0) {
+                const xMin = (minFitFreq >= xScaleTop.domain()[0]) ? xScale(Math.log(2 * 2 * Math.PI * minFitFreq)) : -1;
+                const xMax = (maxFitFreq <= xScaleTop.domain()[1]) ? xScale(Math.log(2 * 2 * Math.PI * maxFitFreq)) : -1;
+                
+                if (xMin >= 0) {
+                    fminMarker.attr("x1", xMin).attr("y1", 0).attr("x2", xMin).attr("y2", plotHeight).style("display", null);
+                } else { fminMarker.style("display", "none"); }
+                
+                if (xMax >= 0) {
+                    fmaxMarker.attr("x1", xMax).attr("y1", 0).attr("x2", xMax).attr("y2", plotHeight).style("display", null);
+                } else { fmaxMarker.style("display", "none"); }
+            } else {
+                fminMarker.style("display", "none");
+                fmaxMarker.style("display", "none");
+            }
 
             const dotsGroup = svg.select(".plot-dots");
             dotsGroup.selectAll("*").remove();
 
-            // MODIFIED: Use yScaleLeft for in-phase data and style based on validity
-            dotsGroup.selectAll(".dot-in-phase")
-                .data(allData)
-                .enter().append("circle")
-                .attr("class", "dot dot-in-phase")
-                .attr("cx", d => xScale(d.ln_2omega))
-                .attr("cy", d => yScaleLeft(d.v3_in_phase_norm))
-                .attr("r", d => d.isValid ? 4 : 2)
-                .style("fill", d => d.isValid ? "#3B82F6" : "#cccccc")
-                .style("opacity", d => d.isValid ? 1.0 : 0.7);
+            dotsGroup.selectAll(".dot-in-phase").data(allData).enter().append("circle")
+                .attr("class", "dot dot-in-phase").attr("cx", d => xScale(d.ln_2omega)).attr("cy", d => yScaleLeft(d.v3_in_phase_norm))
+                .attr("r", d => d.isValid ? 4 : 2).style("fill", d => d.isValid ? "#3B82F6" : "#cccccc").style("opacity", d => d.isValid ? 1.0 : 0.7);
 
-
-            // MODIFIED: Use yScaleRight for out-of-phase data and style based on validity
-            dotsGroup.selectAll(".dot-out-of-phase")
-                .data(allData)
-                .enter().append("circle")
-                .attr("class", "dot dot-out-of-phase")
-                .attr("cx", d => xScale(d.ln_2omega))
-                .attr("cy", d => yScaleRight(d.v3_out_of_phase_norm))
-                .attr("r", d => d.isValid ? 4 : 2)
-                .style("fill", d => d.isValid ? "#F59E0B" : "#cccccc")
-                .style("opacity", d => d.isValid ? 1.0 : 0.7);
+            dotsGroup.selectAll(".dot-out-of-phase").data(allData).enter().append("circle")
+                .attr("class", "dot dot-out-of-phase").attr("cx", d => xScale(d.ln_2omega)).attr("cy", d => yScaleRight(d.v3_out_of_phase_norm))
+                .attr("r", d => d.isValid ? 4 : 2).style("fill", d => d.isValid ? "#F59E0B" : "#cccccc").style("opacity", d => d.isValid ? 1.0 : 0.7);
 
             const fitLineInPhase = svg.select(".fit-line-in-phase");
             const fitLineOutOfPhase = svg.select(".fit-line-out-of-phase");
 
             if(fitData && fitData.length > 1 && inPhaseFitParams) {
-                // MODIFIED: Use yScaleLeft for in-phase fit line
-                const lineInPhaseFunc = d3.line()
-                    .x(d => xScale(d.ln_2omega))
-                    .y(d => yScaleLeft(d.ln_2omega * inPhaseFitParams.slope + inPhaseFitParams.intercept));
+                const lineInPhaseFunc = d3.line().x(d => xScale(d.ln_2omega)).y(d => yScaleLeft(d.ln_2omega * inPhaseFitParams.slope + inPhaseFitParams.intercept));
                 fitLineInPhase.datum(fitData).attr("d", lineInPhaseFunc);
             } else {
                 fitLineInPhase.attr("d", null);
             }
 
             if(fitData && fitData.length > 1 && outOfPhaseFitParams) {
-                // MODIFIED: Use yScaleRight for out-of-phase fit line
-                 const lineOutOfPhaseFunc = d3.line()
-                    .x(d => xScale(d.ln_2omega))
-                    .y(d => yScaleRight(d.ln_2omega * outOfPhaseFitParams.slope + outOfPhaseFitParams.intercept));
+                 const lineOutOfPhaseFunc = d3.line().x(d => xScale(d.ln_2omega)).y(d => yScaleRight(d.ln_2omega * outOfPhaseFitParams.slope + outOfPhaseFitParams.intercept));
                 fitLineOutOfPhase.datum(fitData).attr("d", lineOutOfPhaseFunc);
             } else {
                 fitLineOutOfPhase.attr("d", null);
@@ -979,7 +1054,6 @@
             btn.textContent = 'Generating...';
             btn.disabled = true;
 
-            // MODIFICATION: Save the original index to restore it later
             const originalSelectedDatasetIndex = selectedDatasetIndex;
 
             try {
@@ -989,7 +1063,6 @@
                 const margin = 15;
                 let yPos = margin;
 
-                // Page 1: Title and Header Info
                 pdf.setFontSize(18);
                 pdf.text("3-Omega Analysis Report", pageWidth / 2, yPos, { align: 'center' });
                 yPos += 8;
@@ -1025,7 +1098,6 @@
                 }
                 pdf.setFont('helvetica').setFontSize(10);
 
-                // Subsequent pages for each dataset
                 for (let i = 0; i < analysisResults.length; i++) {
                     pdf.addPage();
                     yPos = margin;
@@ -1065,7 +1137,7 @@
                     pdf.text(sanitizeForPDF(`Wire Width (2b): ${two_b_val_mm.toFixed(3)} +/- ${two_b_esd_mm.toExponential(1)} mm`), col1_x, yPos_col1); yPos_col1 += 6;
                     pdf.text(sanitizeForPDF(`TCR (α): ${tcr_val.toExponential(3)} +/- ${tcr_esd.toExponential(1)} 1/K`), col1_x, yPos_col1); yPos_col1 += 6;
                     pdf.text(sanitizeForPDF(`Substrate Thickness (dₛ): ${document.getElementById('thickness-substrate').value} mm`), col1_x, yPos_col1); yPos_col1 += 6;
-                    pdf.text(`Fitting Range: ${document.getElementById('fit-fmin').value} Hz to ${document.getElementById('fit-fmax').value} Hz`, col1_x, yPos_col1); yPos_col1 += 6;
+                    pdf.text(`Fitting Range: ${result.minFitFreq.toFixed(2)} Hz to ${result.maxFitFreq.toFixed(2)} Hz`, col1_x, yPos_col1); yPos_col1 += 6;
                     pdf.text(`Fit Method: ${document.getElementById('fit-method').value}`, col1_x, yPos_col1); yPos_col1 += 6;
 
                     pdf.text(sanitizeForPDF(`Resistance (R₀): ${result.R0.toFixed(2)} ± ${result.esd_R0.toExponential(1)} Ω`), col2_x, yPos_col2); yPos_col2 += 6;
@@ -1079,11 +1151,10 @@
 
                     yPos = Math.max(yPos_col1, yPos_col2) + 5;
 
-                    // MODIFICATION: Update the global index so the correct plot is drawn
                     selectedDatasetIndex = i;
                     document.getElementById('dataset-selector').value = i;
                     updatePlotForCurrentSelection();
-                    await new Promise(resolve => setTimeout(resolve, 100)); // Wait for render
+                    await new Promise(resolve => setTimeout(resolve, 100));
 
                     const visArea = document.getElementById('visualization-area');
                     const canvas = await html2canvas(visArea, { scale: 2, backgroundColor: '#ffffff' });
@@ -1113,7 +1184,6 @@
                 resultsContainer.prepend(errorDiv);
 
             } finally {
-                // MODIFICATION: Restore the original state
                 selectedDatasetIndex = originalSelectedDatasetIndex;
                 document.getElementById('dataset-selector').value = selectedDatasetIndex;
                 updatePlotForCurrentSelection();
