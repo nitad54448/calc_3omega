@@ -206,6 +206,11 @@
                     </div>
                 </div>
 
+                <div class="control-group">
+                    <label for="phase-shift-180">Apply 180° Phase Correction</label>
+                    <input type="checkbox" id="phase-shift-180" style="width: 20px; height: 20px; cursor: pointer;">
+                </div>
+
 
                 <h2>Experimental Parameters</h2>
                 <div class="control-group">
@@ -271,7 +276,7 @@
             </div>
         </div>
         <footer>
-            <span>3-Omega_Analyzer v3.1</span>
+            <span>3-Omega_Analyzer v3.2</span>
             <span>NitaD, Univ Paris-Saclay</span>
         </footer>
     </div>
@@ -284,7 +289,7 @@
         let selectedDatasetIndex = 0;
 
         document.getElementById('file-upload').addEventListener('change', handleFileSelect, false);
-        ['wire-length', 'esd-wire-length-ppm', 'wire-width', 'esd-wire-width-ppm', 'tcr', 'esd-tcr-ppm', 'thickness-substrate', 'fit-method'].forEach(id => {
+        ['wire-length', 'esd-wire-length-ppm', 'wire-width', 'esd-wire-width-ppm', 'tcr', 'esd-tcr-ppm', 'thickness-substrate', 'fit-method', 'phase-shift-180'].forEach(id => {
             document.getElementById(id)?.addEventListener('change', () => {
                  if (parsedFileContent.datasets.length > 0) {
                     analyzeAndDisplay();
@@ -322,17 +327,17 @@
                         if (fit.slope !== 0) {
                             const avg_R = d3.mean(tcr_data, d => d.y);
                             const tcr_val = (1 / avg_R) * fit.slope;
-                            
+
                             const rel_err_slope_sq = Math.pow(fit.esd_slope / fit.slope, 2);
                             const std_dev_R = d3.deviation(tcr_data, d => d.y) || 0;
                             const rel_err_R_sq = Math.pow(std_dev_R / avg_R, 2);
                             const tcr_esd = Math.abs(tcr_val) * Math.sqrt(rel_err_slope_sq + rel_err_R_sq);
-                            
+
                             tcr_result = { value: tcr_val, esd: tcr_esd };
                         }
                     }
                     parsedFileContent.calculated_tcr = tcr_result;
-                    
+
                     selectedDatasetIndex = 0;
                     analysisResults = [];
                     document.getElementById('fitting-controls').classList.remove('hidden');
@@ -373,7 +378,7 @@
             fminSlider.max = logMax;
             fmaxSlider.min = logMin;
             fmaxSlider.max = logMax;
-            
+
             const step = (logMax - logMin) / 200;
             fminSlider.step = step;
             fmaxSlider.step = step;
@@ -410,7 +415,7 @@
             fminValue.onchange = () => {
                 let val = parseFloat(fminValue.value);
   //              if (val < minFreq) val = minFreq;
- if (val <= 0) { 
+ if (val <= 0) {
                 val = 0.01; // Set to a small positive number to avoid errors.
             }
 
@@ -537,7 +542,7 @@
             });
             return { datasets, jsonHeader };
         }
-        
+
         function analyzeAndDisplay() {
             if (parsedFileContent.datasets.length === 0) return;
 
@@ -559,7 +564,10 @@
 
             const minFitFreqFromUI = parseFloat(document.getElementById('fit-fmin').value);
             const maxFitFreqFromUI = parseFloat(document.getElementById('fit-fmax').value);
-            
+
+            const applyPhaseCorrection = document.getElementById('phase-shift-180').checked;
+            const phaseFactor = applyPhaseCorrection ? -1 : 1;
+
             if (isNaN(L) || isNaN(two_b) || isNaN(alpha_tcr) || isNaN(d_s) || isNaN(minFitFreqFromUI) || isNaN(maxFitFreqFromUI)) {
                 return;
             }
@@ -578,7 +586,7 @@
                         const effective_esdV3Y = (d.esdV3Y > MIN_ESD_V) ? d.esdV3Y : MIN_ESD_V;
                         return {
                             ...d,
-                            v3_in_phase_norm: d.v3_in_phase / I_cubed,
+                            v3_in_phase_norm: (d.v3_in_phase * phaseFactor) / I_cubed,
                             v3_out_of_phase_norm: d.v3_out_of_phase / I_cubed,
                             esdV3X_norm: effective_esdV3X / I_cubed,
                             esdV3Y_norm: effective_esdV3Y / I_cubed,
@@ -597,11 +605,25 @@
                 analysisResults[selectedDatasetIndex].minFitFreq = minFitFreqFromUI;
                 analysisResults[selectedDatasetIndex].maxFitFreq = maxFitFreqFromUI;
             }
-            
-            analysisResults.forEach(result => {
-                const { allData, R0, esd_R0, minFitFreq, maxFitFreq } = result;
 
+            analysisResults.forEach(result => {
+                // Re-process data with current phase factor
+                result.allData = result.data.map(d => {
+                    const I_cubed = Math.pow(d.current, 3);
+                    const effective_esdV3X = (d.esdV3X > MIN_ESD_V) ? d.esdV3X : MIN_ESD_V;
+                    const effective_esdV3Y = (d.esdV3Y > MIN_ESD_V) ? d.esdV3Y : MIN_ESD_V;
+                    return {
+                        ...d,
+                        v3_in_phase_norm: (d.v3_in_phase * phaseFactor) / I_cubed,
+                        v3_out_of_phase_norm: d.v3_out_of_phase / I_cubed,
+                        esdV3X_norm: effective_esdV3X / I_cubed,
+                        esdV3Y_norm: effective_esdV3Y / I_cubed,
+                    };
+                });
+
+                const { allData, R0, esd_R0, minFitFreq, maxFitFreq } = result;
                 const dataForFit = allData.filter(d => d.freq >= minFitFreq && d.freq <= maxFitFreq && d.isValid);
+
 
                 let inPhaseFit, outOfPhaseFit;
                 if (fitMethod === 'robust') {
@@ -654,7 +676,7 @@
                 result.outOfPhaseFitParams = { slope: outOfPhaseFit.slope, intercept: outOfPhaseFit.intercept };
                 result.fitData = dataForFit;
             });
-            
+
             renderResultsUI();
             updatePlotForCurrentSelection();
         }
@@ -782,7 +804,7 @@
 
             fminValue.value = minFitFreq.toFixed(2);
             fmaxValue.value = maxFitFreq.toFixed(2);
-            
+
             fminSlider.value = Math.log(minFitFreq);
             fmaxSlider.value = Math.log(maxFitFreq);
         }
@@ -887,7 +909,7 @@
             }
 
             selectedDatasetIndex = Math.max(0, indexToDelete - 1);
-            
+
             renderResultsUI();
             updateFittingUI();
             updatePlotForCurrentSelection();
@@ -950,7 +972,7 @@
                 { label: "V3_Y/I³ rms", color: "#F59E0B" },
                 { label: "In-Phase Fit", color: "#1E40AF" },
                 { label: "Out-of-Phase Fit", color: "#B45309" },
-                { label: "Invalid Data", color: "#cccccc" } 
+                { label: "Invalid Data", color: "#cccccc" }
             ];
             legendItems.forEach((item, i) => {
                 const legendItem = legend.append("g").attr("transform", `translate(${i * 140}, 0)`);
@@ -962,7 +984,7 @@
 
         function drawPlot() {
             const { allData, fitData, inPhaseFitParams, outOfPhaseFitParams, minFitFreq, maxFitFreq } = currentPlotData;
-            
+
             if (!allData || allData.length === 0) {
                 clearPlot();
                 return;
@@ -996,18 +1018,18 @@
             const legend = svg.select(".legend");
             const legendWidth = legend.node().getBBox().width;
             legend.attr("transform", `translate(${(plotWidth - legendWidth) / 2 + margin.left}, ${margin.top + plotHeight + 70})`);
-            
+
             const fminMarker = svg.select("#fmin-marker");
             const fmaxMarker = svg.select("#fmax-marker");
 
             if (fitData && fitData.length > 0) {
                 const xMin = (minFitFreq >= xScaleTop.domain()[0]) ? xScale(Math.log(2 * 2 * Math.PI * minFitFreq)) : -1;
                 const xMax = (maxFitFreq <= xScaleTop.domain()[1]) ? xScale(Math.log(2 * 2 * Math.PI * maxFitFreq)) : -1;
-                
+
                 if (xMin >= 0) {
                     fminMarker.attr("x1", xMin).attr("y1", 0).attr("x2", xMin).attr("y2", plotHeight).style("display", null);
                 } else { fminMarker.style("display", "none"); }
-                
+
                 if (xMax >= 0) {
                     fmaxMarker.attr("x1", xMax).attr("y1", 0).attr("x2", xMax).attr("y2", plotHeight).style("display", null);
                 } else { fmaxMarker.style("display", "none"); }
@@ -1143,6 +1165,8 @@
                     pdf.text(sanitizeForPDF(`Substrate Thickness (dₛ): ${document.getElementById('thickness-substrate').value} mm`), col1_x, yPos_col1); yPos_col1 += 6;
                     pdf.text(`Fitting Range: ${result.minFitFreq.toFixed(2)} Hz to ${result.maxFitFreq.toFixed(2)} Hz`, col1_x, yPos_col1); yPos_col1 += 6;
                     pdf.text(`Fit Method: ${document.getElementById('fit-method').value}`, col1_x, yPos_col1); yPos_col1 += 6;
+                    pdf.text(`180 Phase Correction: ${document.getElementById('phase-shift-180').checked ? 'Yes' : 'No'}`, col1_x, yPos_col1); yPos_col1 += 6;
+
 
                     pdf.text(sanitizeForPDF(`Resistance (R₀): ${result.R0.toFixed(2)} ± ${result.esd_R0.toExponential(1)} Ω`), col2_x, yPos_col2); yPos_col2 += 6;
                     pdf.text(sanitizeForPDF(`Thermal Conductivity (k): ${result.k.toExponential(3)} ± ${result.esd_k.toExponential(1)} W/mK`), col2_x, yPos_col2); yPos_col2 += 6;
