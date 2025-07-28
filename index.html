@@ -409,7 +409,11 @@
             };
             fminValue.onchange = () => {
                 let val = parseFloat(fminValue.value);
-                if (val < minFreq) val = minFreq;
+  //              if (val < minFreq) val = minFreq;
+ if (val <= 0) { 
+                val = 0.01; // Set to a small positive number to avoid errors.
+            }
+
                 if (val > maxFreq) val = maxFreq;
                 fminValue.value = val.toFixed(2);
                 fminSlider.value = Math.log(val);
