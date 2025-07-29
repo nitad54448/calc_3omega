@@ -66,9 +66,11 @@ The program employs a robust two-step fitting procedure to determine the normali
 
 ### 2.4. Calculation of Physical Properties
 
--   **Thermal Conductivity (k)**: The thermal conductivity of the substrate is calculated from the slope of the final linear fit of the in-phase data. The relationship is:
-    $$ k = - \frac{R_0^2 \alpha_{TCR}}{4 \pi L \cdot \text{Slope}} $$
-    Where `Slope` is the slope of the `(V3_in-phase / I_rms^3)` vs. `ln(2ω)` plot.
+- **Thermal Conductivity ($k$)**: The thermal conductivity of the substrate is calculated from the slope of the final linear fit of the in-phase data. The relationship is:
+
+k = - (R₀² × α_TCR) / (4 × π × L × Slope)
+
+Where `Slope` is the slope of the `(V3_in-phase / I_rms^3)` vs. `ln(2ω)` plot.
 
 -   **Thermal Diffusivity (α)**: The thermal diffusivity is calculated from the intercepts and slope of both the in-phase and out-of-phase fits. It is derived from the analytical solution to the heat equation and is more accurate than simpler empirical formulas. The calculation is based on finding the frequency at which the out-of-phase signal's intercept would cross the in-phase signal.
 
