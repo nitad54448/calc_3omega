@@ -6,7 +6,7 @@ This document provides an explanation for the "3-Omega 2D Fit Analyzer" web appl
 
 The 3-omega method is an AC technique where a metal line on the sample surface acts as both a heater and a thermometer. An AC current at frequency ω is passed through the line, causing Joule heating at frequency 2ω. Due to the material's temperature coefficient of resistance (TCR), this temperature oscillation induces a small voltage component at the third harmonic, 3ω. The magnitude and phase of this $V_{3\omega}$ signal are directly related to the thermal properties of the underlying material.
 
-This program automates the process of parsing raw data files, performing advanced fitting procedures that account for both frequency and current dependence, and generating comprehensive reports.
+This program automates the process of parsing raw data files, performing advanced fitting procedures that account for both frequency and current dependence, and generating comprehensive reports. The calculations used here are made under the assumption that the substrate is semi-infinite; the thickness of the substrate is not used in the calculations now (maybe in some upgrade) but it is used such as the user has a record in the pdf report. It is mainly used as an indication so that the user can estimate the frequency range for linearity.
 
 ## 2. How the Program Works
 
