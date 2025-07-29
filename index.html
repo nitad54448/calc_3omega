@@ -1102,7 +1102,8 @@
                     pdf.text(alpha_str, col_positions[3], yPos);
                     yPos += 6;
                 });
-
+                    //fini avec le tableau, on change les polices
+                 pdf.setFont('helvetica', 'normal');
 
                 for (let i = 0; i < analysisResults.length; i++) {
                     pdf.addPage();
