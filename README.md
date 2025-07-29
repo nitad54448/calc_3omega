@@ -32,14 +32,17 @@ This program automates the process of parsing raw data files, performing advance
     ***
     ```
 
+    I am sorry I am using this messy datafile, but this is the format of datafile I get by using programs I wrote for data acquisition in my lab. Some examples are given in this repository. It is easy to convert your data to this datafile by using some scripts.
+
+
 ### 2.2. Parameter Input
 
-The user must provide several key experimental parameters in the UI, which are then converted to SI units for calculation:
+The user must provide several key experimental parameters in the UI:
 
--   **Voltage Probe Distance (L)**: The length of the heater line between the voltage probes [m].
--   **Wire Width (2b)**: The total width of the heater line [m].
+-   **Voltage Probe Distance (L)**: The length of the heater line between the voltage probes.
+-   **Wire Width (2b)**: The total width of the heater line.
 -   **TCR (α)**: The Temperature Coefficient of Resistance of the heater material [1/K].
--   **Substrate Thickness (dₛ)**: The thickness of the substrate material [m].
+-   **Substrate Thickness (dₛ)**: The thickness of the substrate material.
 
 ### 2.3. Data Processing and Analysis (Two-Step Fit)
 
