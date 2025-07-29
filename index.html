@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3-Omega 2D Fit Analyzer (Corrected)</title>
+    <title>3-Omega 2D Fit Analyzer (v1.9)</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -171,7 +171,7 @@
             flex-shrink: 0;
         }
 
-        /* D3 Plot Styles */
+        /* Plot style */
         .axis path, .axis .tick line { stroke: #888; }
         .axis .tick text { fill: #555; font-size: 14px; }
         .line { fill: none; }
@@ -188,7 +188,7 @@
         .axis.y-axis-right .tick text { fill: #B45309; }
         .axis.y-axis-right path.domain { stroke: #B45309; }
 
-        /* Hidden container for PDF plots */
+        /* container caché pour les graphs PDF extra */
         #pdf-plot-temp-container {
             position: absolute;
             left: -9999px;
@@ -268,8 +268,8 @@
                     <div class="control-group">
                         <label for="fit-method">Fit Method</label>
                         <select id="fit-method">
-                            <option value="wls" selected>Weighted Least Squares</option>
-                            <option value="robust">Robust (Bisquare)</option>
+                            <option value="wls">Weighted Least Squares</option>
+                            <option value="robust" selected>Robust (Bisquare)</option>
                         </select>
                     </div>
                     <div class="control-group">
@@ -297,7 +297,7 @@
             </div>
         </div>
         <footer>
-            <span>3-Omega_Analyzer_2DFit v1.2 (Corrected)</span>
+            <span>3-Omega_Analyzer_2DFit v1.9</span>
             <span>NitaD, Univ Paris-Saclay</span>
         </footer>
     </div>
@@ -313,11 +313,20 @@
         let selectedDatasetIndex = 0;
 
         document.getElementById('file-upload').addEventListener('change', handleFileSelect, false);
-        ['wire-length', 'esd-wire-length-ppm', 'wire-width', 'esd-wire-width-ppm', 'tcr', 'esd-tcr-ppm', 'thickness-substrate', 'fit-method', 'phase-shift-180'].forEach(id => {
+        
+        // --- Event Listeners ---
+        //p'tain de ref de chez Keithley, 1 usec pulse, pour 6221 et MFLI, cherche le lock dans Aux-IN, ou avec un autre demod
+        const globalParamIds = ['wire-length', 'esd-wire-length-ppm', 'wire-width', 'esd-wire-width-ppm', 'tcr', 'esd-tcr-ppm', 'thickness-substrate', 'phase-shift-180'];
+        globalParamIds.forEach(id => {
             document.getElementById(id)?.addEventListener('change', () => {
-                 if (parsedFileContent.datasets.length > 0) {
-                    analyzeAndDisplay();
-                }
+                 if (parsedFileContent.datasets.length > 0) analyzeAndDisplay(true); // Pass true for global analysis
+            });
+        });
+        
+        const localParamIds = ['fit-method'];
+        localParamIds.forEach(id => {
+            document.getElementById(id)?.addEventListener('change', () => {
+                 if (parsedFileContent.datasets.length > 0) analyzeAndDisplay(false); // Pass false for local analysis
             });
         });
         document.getElementById('save-report-btn').addEventListener('click', exportPDFReport);
@@ -375,13 +384,21 @@
                         }
                     }
                     parsedFileContent.calculated_tcr = tcr_result;
+                    
+                    const allFreqs = parsedFileContent.datasets.flatMap(ds => ds.data.map(d => d.freq));
+                    const globalMinFreq = Math.max(0.01, Math.min(...allFreqs));
+                    const globalMaxFreq = Math.max(...allFreqs);
+                    
+                    analysisResults = parsedFileContent.datasets.map(dataset => {
+                        const processedData = processDataWithInternalFit(dataset.data);
+                        return { ...dataset, processedData, minFitFreq: globalMinFreq, maxFitFreq: globalMaxFreq };
+                    });
 
                     selectedDatasetIndex = 0;
-                    analysisResults = [];
                     document.getElementById('fitting-controls').classList.remove('hidden');
                     document.getElementById('save-report-btn').classList.remove('hidden');
                     setupFittingSliders();
-                    analyzeAndDisplay();
+                    analyzeAndDisplay(true); // calcul au début... pas idéal, suivant la taille du fichier
                 } else {
                     showError("Could not parse any valid datasets from the file.");
                     document.getElementById('fitting-controls').classList.add('hidden');
@@ -417,18 +434,18 @@
             fminSlider.value = logMin; fminValue.value = minFreq.toFixed(2);
             fmaxSlider.value = logMax; fmaxValue.value = maxFreq.toFixed(2);
 
-            const updateAnalysis = () => { if (parsedFileContent.datasets.length > 0) analyzeAndDisplay(); };
+            const updateLocalAnalysis = () => { if (parsedFileContent.datasets.length > 0) analyzeAndDisplay(false); };
             fminSlider.oninput = () => {
                 const logVal = parseFloat(fminSlider.value);
                 fminValue.value = Math.exp(logVal).toFixed(2);
                 if (parseFloat(fmaxSlider.value) < logVal) { fmaxSlider.value = logVal; fmaxValue.value = Math.exp(logVal).toFixed(2); }
-                updateAnalysis();
+                updateLocalAnalysis();
             };
             fmaxSlider.oninput = () => {
                 const logVal = parseFloat(fmaxSlider.value);
                 fmaxValue.value = Math.exp(logVal).toFixed(2);
                 if (logVal < parseFloat(fminSlider.value)) { fminSlider.value = logVal; fminValue.value = Math.exp(logVal).toFixed(2); }
-                updateAnalysis();
+                updateLocalAnalysis();
             };
             fminValue.onchange = () => {
                 let val = parseFloat(fminValue.value);
@@ -436,7 +453,7 @@
                 if (val > maxFreq) val = maxFreq;
                 fminValue.value = val.toFixed(2);
                 fminSlider.value = Math.log(val);
-                updateAnalysis();
+                updateLocalAnalysis();
             };
             fmaxValue.onchange = () => {
                 let val = parseFloat(fmaxValue.value);
@@ -444,7 +461,7 @@
                 if (val > maxFreq) val = maxFreq;
                 fmaxValue.value = val.toFixed(2);
                 fmaxSlider.value = Math.log(val);
-                updateAnalysis();
+                updateLocalAnalysis();
             };
         }
 
@@ -528,14 +545,18 @@
             if (points.length < 2) return { slope: 0, esd_slope: 0 };
             let sum_xy = 0, sum_xx = 0;
             points.forEach(p => {
-                sum_xy += p[xKey] * p[yKey];
-                sum_xx += p[xKey] * p[xKey];
+                if(!isNaN(p[xKey]) && !isNaN(p[yKey])) {
+                    sum_xy += p[xKey] * p[yKey];
+                    sum_xx += p[xKey] * p[xKey];
+                }
             });
             if (sum_xx === 0) return { slope: 0, esd_slope: 0 };
             const slope = sum_xy / sum_xx;
             let sum_sq_residuals = 0;
             points.forEach(p => {
-                sum_sq_residuals += Math.pow(p[yKey] - slope * p[xKey], 2);
+                 if(!isNaN(p[xKey]) && !isNaN(p[yKey])) {
+                    sum_sq_residuals += Math.pow(p[yKey] - slope * p[xKey], 2);
+                 }
             });
             const dof = points.length - 1;
             if (dof <= 0) return { slope: slope, esd_slope: 0 };
@@ -552,7 +573,7 @@
                 const validPoints = points.filter(p => p.isValid);
 
                 if (validPoints.length === 0) {
-                    processedData.push({ freq, ln_2omega: points[0].ln_2omega, isValid: false, v3_in_phase_norm: 0, esdV3X_norm: 0, v3_out_of_phase_norm: 0, esdV3Y_norm: 0 });
+                    processedData.push({ freq, ln_2omega: points[0].ln_2omega, isValid: false, v3_in_phase_norm: NaN, esdV3X_norm: NaN, v3_out_of_phase_norm: NaN, esdV3Y_norm: NaN });
                     continue;
                 }
 
@@ -576,7 +597,7 @@
                         fit_in_phase = { slope: mean_v3x / i_cubed, esd_slope: esd_v3x / i_cubed };
                         fit_out_of_phase = { slope: mean_v3y / i_cubed, esd_slope: esd_v3y / i_cubed };
                     } else {
-                        fit_in_phase = { slope: 0, esd_slope: 0 }; fit_out_of_phase = { slope: 0, esd_slope: 0 };
+                        fit_in_phase = { slope: NaN, esd_slope: NaN }; fit_out_of_phase = { slope: NaN, esd_slope: NaN };
                     }
                 } else {
                     const p = pointsWithI3[0];
@@ -584,7 +605,7 @@
                        fit_in_phase = { slope: p.v3_in_phase / p.i_cubed, esd_slope: p.esdV3X / p.i_cubed };
                        fit_out_of_phase = { slope: p.v3_out_of_phase / p.i_cubed, esd_slope: p.esdV3Y / p.i_cubed };
                     } else {
-                       fit_in_phase = { slope: 0, esd_slope: 0 }; fit_out_of_phase = { slope: 0, esd_slope: 0 };
+                       fit_in_phase = { slope: NaN, esd_slope: NaN }; fit_out_of_phase = { slope: NaN, esd_slope: NaN };
                     }
                 }
 
@@ -597,60 +618,39 @@
             return processedData.sort((a, b) => a.freq - b.freq);
         }
 
-        // --- CORRECTED CALCULATION IS IN THIS FUNCTION ---
-        function analyzeAndDisplay() {
-            if (parsedFileContent.datasets.length === 0) return;
-
+        // --- : Main analysis function ---
+        function analyzeAndDisplay(analyzeAll = false) {
+            if (analysisResults.length === 0) return;
+            
+            // --- Read all global parameters once
             const L = parseFloat(document.getElementById('wire-length').value) * 1e-3;
             const esd_L_ppm = parseFloat(document.getElementById('esd-wire-length-ppm').value);
             const rel_err_L = esd_L_ppm / 1e6;
-
             const two_b = parseFloat(document.getElementById('wire-width').value) * 1e-3;
             const esd_two_b_ppm = parseFloat(document.getElementById('esd-wire-width-ppm').value);
             const rel_err_two_b = esd_two_b_ppm / 1e6;
-            const b = two_b / 2;
-
+            const b = two_b / 2; //c'est du lourd ;-)... ça aurait été plus facile de définir b avec parseFloat et utiliser 2*b dans les formules... à voir plus tard
+            const C_min = 4; //les constantes pour le domaine de linéairité
+            const C_max = 5;
             const alpha_tcr = parseFloat(document.getElementById('tcr').value);
             const esd_tcr_ppm = parseFloat(document.getElementById('esd-tcr-ppm').value);
             const rel_err_tcr = esd_tcr_ppm / 1e6;
-
             const d_s = parseFloat(document.getElementById('thickness-substrate').value) * 1e-3;
             const fitMethod = document.getElementById('fit-method').value;
-
-            const minFitFreq = parseFloat(document.getElementById('fit-fmin').value);
-            const maxFitFreq = parseFloat(document.getElementById('fit-fmax').value);
             const applyPhaseCorrection = document.getElementById('phase-shift-180').checked;
             const phaseFactor = applyPhaseCorrection ? -1 : 1;
+            // Keithley 6221 donne des pulses et le lock-in les retrouve à -180; et des fois on les trouve plus... dur en dessous de 1Hz
+            // à tester avec la LK155, mais le V min est à 10V, .. risque de griller le MFLI (max 3V en entrée)
+            // ---  core calculation logic as a separate function
+            const performAnalysisOnDataset = (result, fitRange) => {
+                result.processedData.forEach(p => {
+                    if (p.v3_in_phase_norm_uncorrected === undefined) p.v3_in_phase_norm_uncorrected = p.v3_in_phase_norm;
+                    if (p.v3_out_of_phase_norm_uncorrected === undefined) p.v3_out_of_phase_norm_uncorrected = p.v3_out_of_phase_norm;
+                    p.v3_in_phase_norm = p.v3_in_phase_norm_uncorrected * phaseFactor;
+                    p.v3_out_of_phase_norm = p.v3_out_of_phase_norm_uncorrected * phaseFactor;
+                });
 
-            if (isNaN(L) || isNaN(two_b) || isNaN(alpha_tcr) || isNaN(d_s) || isNaN(minFitFreq) || isNaN(maxFitFreq)) return;
-            
-            if (analysisResults.length !== parsedFileContent.datasets.length) analysisResults = [];
-
-            if (analysisResults.length === 0) {
-                const allFreqs = parsedFileContent.datasets.flatMap(ds => ds.data.map(d => d.freq));
-                const globalMinFreq = Math.max(0.01, Math.min(...allFreqs));
-                const globalMaxFreq = Math.max(...allFreqs);
-                analysisResults = parsedFileContent.datasets.map(dataset => ({
-                    ...dataset, minFitFreq: globalMinFreq, maxFitFreq: globalMaxFreq,
-                }));
-            }
-
-            if (analysisResults[selectedDatasetIndex]) {
-                analysisResults[selectedDatasetIndex].minFitFreq = minFitFreq;
-                analysisResults[selectedDatasetIndex].maxFitFreq = maxFitFreq;
-            }
-
-            analysisResults.forEach(result => {
-                const rawData = result.data.map(d => ({
-                    ...d,
-                    v3_in_phase: d.v3_in_phase * phaseFactor,
-                    v3_out_of_phase: d.v3_out_of_phase * phaseFactor
-                }));
-
-                const processedData = processDataWithInternalFit(rawData);
-                result.processedData = processedData;
-
-                const dataForFit = processedData.filter(d => d.freq >= minFitFreq && d.freq <= maxFitFreq && d.isValid);
+                const dataForFit = result.processedData.filter(d => d.freq >= fitRange.min && d.freq <= fitRange.max && d.isValid && !isNaN(d.v3_in_phase_norm));
                 
                 let inPhaseFit, outOfPhaseFit;
                 if (fitMethod === 'robust') {
@@ -663,54 +663,74 @@
 
                 let k = NaN, esd_k = NaN;
                 if (inPhaseFit.slope !== 0) {
-                    k = - (Math.pow(result.R0, 2) * alpha_tcr) / (4 * Math.PI * L * inPhaseFit.slope);
+                    k = -(Math.pow(result.R0, 2) * alpha_tcr) / (4 * Math.PI * L * inPhaseFit.slope);
                     const rel_err_slope_sq = Math.pow(inPhaseFit.esd_slope / inPhaseFit.slope, 2);
                     const rel_err_R0_sq = (result.R0 > 0 && result.esd_R0 > 0) ? 4 * Math.pow(result.esd_R0 / result.R0, 2) : 0;
                     const rel_err_tcr_sq = Math.pow(rel_err_tcr, 2);
                     const rel_err_L_sq = Math.pow(rel_err_L, 2);
                     esd_k = Math.abs(k) * Math.sqrt(rel_err_slope_sq + rel_err_R0_sq + rel_err_tcr_sq + rel_err_L_sq);
+                //pas sur de cette formule de propagation des erreurs, à vérifier
                 }
-
-                // --- CORRECTED THERMAL DIFFUSIVITY CALCULATION STARTS HERE ---
+                
                 let alpha_diffusivity_m2s = NaN, esd_alpha_diffusivity_m2s = NaN;
                 const S = inPhaseFit.slope, Ix = inPhaseFit.intercept;
                 const esd_S = inPhaseFit.esd_slope, esd_Ix = inPhaseFit.esd_intercept;
-
                 if (S !== 0) {
-                    const eulerGamma = 0.5772156649;
-                    // Corrected formula for thermal diffusivity based on the in-phase intercept
-                    // alpha = (b^2 * exp(gamma) / 8) * exp(-Ix / S)
+                    const eulerGamma = 0.5772156;
                     alpha_diffusivity_m2s = (b * b * Math.exp(eulerGamma) / 8) * Math.exp(-Ix / S);
-
-                    // Corrected error propagation
                     if (esd_S > 0 && esd_Ix > 0) {
                         const rel_err_b_sq = Math.pow(rel_err_two_b, 2);
                         const term_err_Ix_sq = Math.pow(esd_Ix / S, 2);
                         const term_err_S_sq = Math.pow(Ix * esd_S / (S * S), 2);
-                        
-                        // (delta_alpha / alpha)^2 = 4*(delta_b/b)^2 + (delta_Ix/S)^2 + (Ix*delta_S/S^2)^2
-                        const rel_err_alpha_sq = 4 * rel_err_b_sq + term_err_Ix_sq + term_err_S_sq;
-                        
-                        esd_alpha_diffusivity_m2s = Math.abs(alpha_diffusivity_m2s) * Math.sqrt(rel_err_alpha_sq);
+                        esd_alpha_diffusivity_m2s = Math.abs(alpha_diffusivity_m2s) * Math.sqrt(4 * rel_err_b_sq + term_err_Ix_sq + term_err_S_sq);
                     }
                 }
-                // --- CORRECTED THERMAL DIFFUSIVITY CALCULATION ENDS HERE ---
 
-                result.k = k;
-                result.esd_k = esd_k;
-                result.alpha = alpha_diffusivity_m2s * 1e6; // Convert from m^2/s to mm^2/s
-                result.esd_alpha = esd_alpha_diffusivity_m2s * 1e6;
+                result.k = k; result.esd_k = esd_k;
+                result.alpha = alpha_diffusivity_m2s * 1e6; result.esd_alpha = esd_alpha_diffusivity_m2s * 1e6;
+                
+                if (alpha_diffusivity_m2s > 0) {
+                    result.f_min_linearity = (d_s > 0) ? (C_min * C_min * alpha_diffusivity_m2s) / (4 * Math.PI * d_s * d_s) : NaN;
+                    result.f_max_linearity = (b > 0) ? alpha_diffusivity_m2s / (4 * Math.PI * Math.pow(C_max * b, 2)) : NaN;
+                } else {
+                    result.f_min_linearity = NaN; result.f_max_linearity = NaN;
+                }
+                
                 result.inPhaseFitParams = { slope: inPhaseFit.slope, intercept: inPhaseFit.intercept };
                 result.outOfPhaseFitParams = { slope: outOfPhaseFit.slope, intercept: outOfPhaseFit.intercept };
                 result.fitData = dataForFit;
-            });
+            };
+
+            if (analyzeAll) {
+                // Global analysis: loop through all datasets using their stored fit ranges
+                analysisResults.forEach(result => {
+                    performAnalysisOnDataset(result, { min: result.minFitFreq, max: result.maxFitFreq });
+                });
+            } else {
+                // Local analysis: pour les données affichées
+                const result = analysisResults[selectedDatasetIndex];
+                if (result) {
+                    const minFitFreq = parseFloat(document.getElementById('fit-fmin').value);
+                    const maxFitFreq = parseFloat(document.getElementById('fit-fmax').value);
+                    result.minFitFreq = minFitFreq;
+                    result.maxFitFreq = maxFitFreq;
+                    performAnalysisOnDataset(result, { min: minFitFreq, max: maxFitFreq });
+                }
+            }
+            
+            // --- Update global properties
+            const avg_alpha_m2s = d3.mean(analysisResults, d => d.alpha / 1e6);
+            if (avg_alpha_m2s > 0) {
+                parsedFileContent.global_f_min_linearity = (d_s > 0) ? (C_min * C_min * avg_alpha_m2s) / (4 * Math.PI * d_s * d_s) : NaN;
+                parsedFileContent.global_f_max_linearity = (b > 0) ? avg_alpha_m2s / (4 * Math.PI * Math.pow(C_max * b, 2)) : NaN;
+            }
 
             renderResultsUI();
             updatePlotForCurrentSelection();
         }
 
         function weightedLinearRegression(data, xKey, yKey, sigmaKey) {
-            const pointsToFit = data.filter(d => d[sigmaKey] > 0);
+            const pointsToFit = data.filter(d => d[sigmaKey] > 0 && !isNaN(d[yKey]));
             if (pointsToFit.length < 2) return { slope: 0, intercept: 0, esd_slope: 0, esd_intercept: 0 };
 
             let sum_w = 0, sum_wx = 0, sum_wy = 0, sum_wxy = 0, sum_wxx = 0;
@@ -727,7 +747,7 @@
         }
 
         function robustLinearRegression(data, xKey, yKey, sigmaKey) {
-            let pointsToFit = data.filter(d => d[sigmaKey] > 0);
+            let pointsToFit = data.filter(d => d[sigmaKey] > 0 && !isNaN(d[yKey]));
             if (pointsToFit.length < 2) return { slope: 0, intercept: 0, esd_slope: 0, esd_intercept: 0 };
 
             const MAX_ITERATIONS = 25;
@@ -812,9 +832,38 @@
 
         function renderResultsUI() {
             const resultsContainer = document.getElementById('results-container');
-            resultsContainer.innerHTML = '<h2>Analysis Results</h2>';
+            resultsContainer.innerHTML = '';
             if (analysisResults.length === 0) return;
 
+            const tcr = parsedFileContent.calculated_tcr;
+            const f_min = parsedFileContent.global_f_min_linearity;
+            const f_max = parsedFileContent.global_f_max_linearity;
+            let hasGeneralInfo = (tcr && tcr.value !== "unknown" && !isNaN(tcr.value)) || (!isNaN(f_min) && !isNaN(f_max));
+
+            if (hasGeneralInfo) {
+                const generalInfoContainer = document.createElement('div');
+                let generalInfoHTML = '<h2>General Properties</h2><div class="results-card">';
+                if (tcr && tcr.value !== "unknown" && !isNaN(tcr.value)) {
+                    generalInfoHTML += `<p>Calculated TCR: <strong>${tcr.value.toExponential(2)} ± ${tcr.esd.toExponential(1)} 1/K</strong></p>`;
+                }
+                if (!isNaN(f_min) && !isNaN(f_max)) {
+                    const formatFreq = (f) => {
+                        if (f > 1e6) return `${(f/1e6).toFixed(2)} MHz`;
+                        if (f > 1e3) return `${(f/1e3).toFixed(2)} kHz`;
+                        return `${f.toFixed(2)} Hz`;
+                    };
+                    generalInfoHTML += `<p title="f_min ensures substrate is thermally thick. f_max ensures 2D heat flow from the heater.">Recommended Fit Range: <strong>${f_min.toFixed(2)} Hz — ${formatFreq(f_max)}</strong></p>`;
+                    //les limites min max sont un peu trop strictes... dans les papiers de Uher (?) c'est plus large ()
+                }
+                generalInfoHTML += '</div>';
+                generalInfoContainer.innerHTML = generalInfoHTML;
+                resultsContainer.appendChild(generalInfoContainer);
+            }
+
+            const analysisTitle = document.createElement('h2');
+            analysisTitle.textContent = 'Per-Dataset Analysis';
+            resultsContainer.appendChild(analysisTitle);
+            
             const controlsContainer = document.createElement('div');
             controlsContainer.id = 'dataset-controls';
             controlsContainer.className = 'control-group';
@@ -828,6 +877,7 @@
                 if (index === selectedDatasetIndex) option.selected = true;
                 selector.appendChild(option);
             });
+            
             selector.addEventListener('change', (e) => {
                 selectedDatasetIndex = parseInt(e.target.value);
                 updateFittingUI();
@@ -858,25 +908,17 @@
             }
             const result = analysisResults[selectedDatasetIndex];
 
-            let alpha_text = `<strong>${result.alpha.toExponential(3)} mm²/s</strong>`;
-            if (!isNaN(result.esd_alpha) && result.esd_alpha > 0) {
+            let alpha_text = `<strong>...</strong>`;
+            if(!isNaN(result.alpha)) {
                 alpha_text = `<strong>${result.alpha.toExponential(3)} ± ${result.esd_alpha.toExponential(1)} mm²/s</strong>`;
             }
-            let tcr_line = '';
-            if (parsedFileContent.calculated_tcr) {
-                const tcr = parsedFileContent.calculated_tcr;
-                if (tcr.value !== "unknown" && !isNaN(tcr.value)) {
-                    tcr_line = `<p>Calculated TCR: <strong>${tcr.value.toExponential(2)} ± ${tcr.esd.toExponential(1)} 1/K</strong></p>`;
-                }
-            }
-
+            
             cardContainer.innerHTML = `
                 <div class="results-card">
                     <h3>Dataset: ${formatTimestamp(result.timestamp)}</h3>
                     <p>Avg Temperature: <strong>${result.avg_temp > 0 ? result.avg_temp.toFixed(2) + ' K' : 'N/A'}</strong></p>
                     <p>Resistance (R₀): <strong>${result.R0.toFixed(2)} ± ${result.esd_R0.toExponential(1)} Ω</strong></p>
-                    ${tcr_line}
-                    <p>Thermal Cond. (k): <strong>${result.k.toExponential(3)} ± ${result.esd_k.toExponential(1)} W/mK</strong></p>
+                    <p>Thermal Cond. (k): <strong>${!isNaN(result.k) ? result.k.toExponential(3) + ' ± ' + result.esd_k.toExponential(1) : '...'} W/mK</strong></p>
                     <p>Thermal Diff. (α): ${alpha_text}</p>
                 </div>`;
         }
@@ -884,7 +926,7 @@
         function deleteSelectedDataset() {
             if (analysisResults.length === 0) return;
             const indexToDelete = selectedDatasetIndex;
-            parsedFileContent.datasets.splice(indexToDelete, 1);
+            
             analysisResults.splice(indexToDelete, 1);
             if (analysisResults.length === 0) {
                 selectedDatasetIndex = 0;
@@ -895,9 +937,8 @@
                 return;
             }
             selectedDatasetIndex = Math.max(0, indexToDelete - 1);
-            renderResultsUI();
             updateFittingUI();
-            updatePlotForCurrentSelection();
+            analyzeAndDisplay(true); // Re-run global analysis after deletion
         }
 
         function updatePlotForCurrentSelection() {
@@ -972,7 +1013,7 @@
             const xScale = d3.scaleLinear().domain(d3.extent(processedData, d => d.ln_2omega)).range([0, plotWidth]);
             const xScaleTop = d3.scaleLog().domain(d3.extent(processedData, d => d.freq)).range([0, plotWidth]);
             
-            const validData = processedData.filter(d => d.isValid);
+            const validData = processedData.filter(d => d.isValid && !isNaN(d.v3_in_phase_norm) && !isNaN(d.v3_out_of_phase_norm));
             const yLeftMin = d3.min(validData, d => d.v3_in_phase_norm - d.esdV3X_norm);
             const yLeftMax = d3.max(validData, d => d.v3_in_phase_norm + d.esdV3X_norm);
             const yScaleLeft = d3.scaleLinear().domain([yLeftMin, yLeftMax]).range([plotHeight, 0]).nice();
@@ -1093,8 +1134,8 @@
                     if (yPos > pageHeight - margin - 10) { pdf.addPage(); yPos = margin; }
                     const temp_str = res.avg_temp > 0 ? res.avg_temp.toFixed(2) : 'N/A';
                     const R0_str = `${res.R0.toFixed(3)} +/- ${res.esd_R0.toExponential(1)}`;
-                    const k_str = `${res.k.toExponential(2)} +/- ${res.esd_k.toExponential(1)}`;
-                    const alpha_str = `${res.alpha.toExponential(2)} +/- ${res.esd_alpha.toExponential(1)}`;
+                    const k_str = !isNaN(res.k) ? `${res.k.toExponential(2)} +/- ${res.esd_k.toExponential(1)}` : 'N/A';
+                    const alpha_str = !isNaN(res.alpha) ? `${res.alpha.toExponential(2)} +/- ${res.esd_alpha.toExponential(1)}` : 'N/A';
                     
                     pdf.text(temp_str, col_positions[0], yPos);
                     pdf.text(R0_str, col_positions[1], yPos);
@@ -1102,8 +1143,8 @@
                     pdf.text(alpha_str, col_positions[3], yPos);
                     yPos += 6;
                 });
-                    //fini avec le tableau, on change les polices
-                 pdf.setFont('helvetica', 'normal');
+                
+                pdf.setFont('helvetica', 'normal');
 
                 for (let i = 0; i < analysisResults.length; i++) {
                     pdf.addPage();
@@ -1138,9 +1179,15 @@
 
                     pdf.text(sanitizeForPDF(`Avg Temperature: ${result.avg_temp > 0 ? result.avg_temp.toFixed(2) + ' K' : 'N/A'}`), col2_x, yPos_col2); yPos_col2 += 6;
                     pdf.text(sanitizeForPDF(`Resistance (R₀): ${result.R0.toFixed(2)} ± ${result.esd_R0.toExponential(1)} Ω`), col2_x, yPos_col2); yPos_col2 += 6;
-                    pdf.text(sanitizeForPDF(`Thermal Conductivity (k): ${result.k.toExponential(3)} ± ${result.esd_k.toExponential(1)} W/mK`), col2_x, yPos_col2); yPos_col2 += 6;
-                    let alpha_text_pdf = sanitizeForPDF(`${result.alpha.toExponential(3)} ± ${result.esd_alpha.toExponential(1)} mm²/s`);
+                    const k_text_pdf = !isNaN(result.k) ? `${result.k.toExponential(3)} ± ${result.esd_k.toExponential(1)} W/mK` : 'N/A';
+                    pdf.text(sanitizeForPDF(`Thermal Conductivity (k): ${k_text_pdf}`), col2_x, yPos_col2); yPos_col2 += 6;
+                    const alpha_text_pdf = !isNaN(result.alpha) ? `${result.alpha.toExponential(3)} ± ${result.esd_alpha.toExponential(1)} mm²/s` : 'N/A';
                     pdf.text(sanitizeForPDF(`Thermal Diffusivity (α): ${alpha_text_pdf}`), col2_x, yPos_col2); yPos_col2 += 6;
+                    
+                    if (!isNaN(result.f_min_linearity) && !isNaN(result.f_max_linearity)) {
+                        const f_max_formatted = result.f_max_linearity > 1000 ? `${(result.f_max_linearity/1000).toFixed(1)} kHz` : `${result.f_max_linearity.toFixed(1)} Hz`;
+                        pdf.text(sanitizeForPDF(`Rec. Fit Range: ${result.f_min_linearity.toFixed(1)} Hz - ${f_max_formatted}`), col2_x, yPos_col2); yPos_col2 += 6;
+                    }
 
                     yPos = Math.max(yPos_col1, yPos_col2) + 5;
                     selectedDatasetIndex = i;
@@ -1187,7 +1234,7 @@
                         pdf.addImage(canvas3.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, (canvas3.height * imgWidth1) / canvas3.width);
                     }
                 }
-                pdf.save(`3omega_report_corrected_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+                pdf.save(`3omega_report_v1.9_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
             } catch (error) {
                 console.error("Error generating PDF:", error);
                 showError("An error occurred while generating the PDF. See browser console.");
@@ -1201,16 +1248,22 @@
             }
         }
 
+// les graphs en plus, si pas de Temp, pas de TCR, rien à dessiner
+
         function drawSummaryPlot(data, container) {
             const plotMargin = { top: 40, right: 60, bottom: 50, left: 60 };
             const width = 700 - plotMargin.left - plotMargin.right;
             const height = 400 - plotMargin.top - plotMargin.bottom;
 
             const svg = container.append("svg").attr("width", width + plotMargin.left + plotMargin.right).attr("height", height + plotMargin.top + plotMargin.bottom).append("g").attr("transform", `translate(${plotMargin.left},${plotMargin.top})`);
-            const xScale = d3.scalePoint().domain(data.map((d, i) => i + 1)).range([0, width]).padding(0.5);
             
-            const [k_min, k_max] = d3.extent(data, d => d.k);
-            const [alpha_min, alpha_max] = d3.extent(data, d => d.alpha);
+            const validData = data.filter(d => !isNaN(d.k) && !isNaN(d.alpha));
+            if (validData.length === 0) return;
+
+            const xScale = d3.scalePoint().domain(validData.map((d, i) => i + 1)).range([0, width]).padding(0.5);
+            
+            const [k_min, k_max] = d3.extent(validData, d => d.k);
+            const [alpha_min, alpha_max] = d3.extent(validData, d => d.alpha);
 
             const y1Scale = d3.scaleLinear().domain([k_min * 0.9, k_max * 1.1]).range([height, 0]).nice();
             const y2Scale = d3.scaleLinear().domain([alpha_min * 0.9, alpha_max * 1.1]).range([height, 0]).nice();
@@ -1225,22 +1278,22 @@
             svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", -15).text("Summary of Results").style("font-size", "16px").style("font-weight", "bold");
             
             const capWidth = 4;
-            const errK = svg.selectAll(".err-k").data(data).enter().append("g").style("stroke", "#1E40AF");
+            const errK = svg.selectAll(".err-k").data(validData).enter().append("g").style("stroke", "#1E40AF");
             errK.append("line").attr("x1", (d, i) => xScale(i + 1)).attr("x2", (d, i) => xScale(i + 1)).attr("y1", d => y1Scale(d.k - d.esd_k)).attr("y2", d => y1Scale(d.k + d.esd_k));
             errK.append("line").attr("x1", (d, i) => xScale(i + 1) - capWidth).attr("x2", (d, i) => xScale(i + 1) + capWidth).attr("y1", d => y1Scale(d.k + d.esd_k)).attr("y2", d => y1Scale(d.k + d.esd_k));
             errK.append("line").attr("x1", (d, i) => xScale(i + 1) - capWidth).attr("x2", (d, i) => xScale(i + 1) + capWidth).attr("y1", d => y1Scale(d.k - d.esd_k)).attr("y2", d => y1Scale(d.k - d.esd_k));
 
-            const errAlpha = svg.selectAll(".err-alpha").data(data).enter().append("g").style("stroke", "#B45309");
+            const errAlpha = svg.selectAll(".err-alpha").data(validData).enter().append("g").style("stroke", "#B45309");
             errAlpha.append("line").attr("x1", (d, i) => xScale(i + 1)).attr("x2", (d, i) => xScale(i + 1)).attr("y1", d => y2Scale(d.alpha - d.esd_alpha)).attr("y2", d => y2Scale(d.alpha + d.esd_alpha));
             errAlpha.append("line").attr("x1", (d, i) => xScale(i + 1) - capWidth).attr("x2", (d, i) => xScale(i + 1) + capWidth).attr("y1", d => y2Scale(d.alpha + d.esd_alpha)).attr("y2", d => y2Scale(d.alpha + d.esd_alpha));
             errAlpha.append("line").attr("x1", (d, i) => xScale(i + 1) - capWidth).attr("x2", (d, i) => xScale(i + 1) + capWidth).attr("y1", d => y2Scale(d.alpha - d.esd_alpha)).attr("y2", d => y2Scale(d.alpha - d.esd_alpha));
 
-            svg.selectAll(".dot-k").data(data).enter().append("circle").attr("cx", (d, i) => xScale(i + 1)).attr("cy", d => y1Scale(d.k)).attr("r", 5).style("fill", "#1E40AF");
-            svg.selectAll(".dot-alpha").data(data).enter().append("circle").attr("cx", (d, i) => xScale(i + 1)).attr("cy", d => y2Scale(d.alpha)).attr("r", 5).style("fill", "#B45309");
+            svg.selectAll(".dot-k").data(validData).enter().append("circle").attr("cx", (d, i) => xScale(i + 1)).attr("cy", d => y1Scale(d.k)).attr("r", 5).style("fill", "#1E40AF");
+            svg.selectAll(".dot-alpha").data(validData).enter().append("circle").attr("cx", (d, i) => xScale(i + 1)).attr("cy", d => y2Scale(d.alpha)).attr("r", 5).style("fill", "#B45309");
         }
 
         function drawRvTPlot(data, container) {
-            const plotData = data.map(d => ({ x: d.avg_temp, y: d.R0, sigma: d.esd_R0 })).filter(d => d.x > 0);
+            const plotData = data.map(d => ({ x: d.avg_temp, y: d.R0, sigma: d.esd_R0 })).filter(d => d.x > 0 && !isNaN(d.y));
             if (plotData.length < 2) return;
 
             const plotMargin = { top: 40, right: 40, bottom: 50, left: 60 };
@@ -1251,7 +1304,7 @@
             
             const xScale = d3.scaleLinear().domain(d3.extent(plotData, d => d.x)).range([0, width]).nice();
             const yScale = d3.scaleLinear().domain([y_min * 0.99, y_max * 1.01]).range([height, 0]).nice();
-            //assez étroit, 1% de la valeur sur l'echelle
+            
             svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(xScale));
             svg.append("g").call(d3.axisLeft(yScale));
 
@@ -1278,8 +1331,9 @@
             }
         }
 
+        //si Temp dispo
         function drawPropertiesVsTempPlot(data, container) {
-            const plotData = data.filter(d => d.avg_temp > 0);
+            const plotData = data.filter(d => d.avg_temp > 0 && !isNaN(d.k) && !isNaN(d.alpha));
             if (plotData.length < 2) return;
             const plotMargin = { top: 40, right: 60, bottom: 50, left: 60 };
             const width = 700 - plotMargin.left - plotMargin.right, height = 400 - plotMargin.top - plotMargin.bottom;
@@ -1317,7 +1371,7 @@
         }
 
 
-        // --- Resizer Logic ---
+        // --- Resize
         const resizer = document.getElementById('drag-handle');
         const leftPanel = document.getElementById('controls-panel');
         let isResizing = false;
