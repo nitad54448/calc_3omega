@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3-Omega 2D Fit Analyzer</title>
+    <title>3-Omega 2D Fit Analyzer (Corrected)</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -297,7 +297,7 @@
             </div>
         </div>
         <footer>
-            <span>3-Omega_Analyzer_2DFit v1.2</span>
+            <span>3-Omega_Analyzer_2DFit v1.2 (Corrected)</span>
             <span>NitaD, Univ Paris-Saclay</span>
         </footer>
     </div>
@@ -597,6 +597,7 @@
             return processedData.sort((a, b) => a.freq - b.freq);
         }
 
+        // --- CORRECTED CALCULATION IS IN THIS FUNCTION ---
         function analyzeAndDisplay() {
             if (parsedFileContent.datasets.length === 0) return;
 
@@ -670,23 +671,34 @@
                     esd_k = Math.abs(k) * Math.sqrt(rel_err_slope_sq + rel_err_R0_sq + rel_err_tcr_sq + rel_err_L_sq);
                 }
 
+                // --- CORRECTED THERMAL DIFFUSIVITY CALCULATION STARTS HERE ---
                 let alpha_diffusivity_m2s = NaN, esd_alpha_diffusivity_m2s = NaN;
-                const S = inPhaseFit.slope, Ix = inPhaseFit.intercept, Iy = outOfPhaseFit.intercept;
-                const esd_S = inPhaseFit.esd_slope, esd_Ix = inPhaseFit.esd_intercept, esd_Iy = outOfPhaseFit.esd_intercept;
+                const S = inPhaseFit.slope, Ix = inPhaseFit.intercept;
+                const esd_S = inPhaseFit.esd_slope, esd_Ix = inPhaseFit.esd_intercept;
 
-                if (S !== 0 && Iy !== 0 && Ix !== 0) {
-                    const X = (-Iy - Ix) / S;
-                    const fc = (1 / (4 * Math.PI)) * Math.exp(X);
-                    alpha_diffusivity_m2s = 2 * Math.PI * fc * b * b;
-                    if (esd_S > 0 && esd_Ix > 0 && esd_Iy > 0) {
-                        const esd_X_sq = (1 / (S*S)) * (esd_Iy*esd_Iy + esd_Ix*esd_Ix) + Math.pow(X / S, 2) * (esd_S*esd_S);
-                        esd_alpha_diffusivity_m2s = Math.abs(alpha_diffusivity_m2s) * Math.sqrt(esd_X_sq + 4 * Math.pow(rel_err_two_b, 2));
+                if (S !== 0) {
+                    const eulerGamma = 0.5772156649;
+                    // Corrected formula for thermal diffusivity based on the in-phase intercept
+                    // alpha = (b^2 * exp(gamma) / 8) * exp(-Ix / S)
+                    alpha_diffusivity_m2s = (b * b * Math.exp(eulerGamma) / 8) * Math.exp(-Ix / S);
+
+                    // Corrected error propagation
+                    if (esd_S > 0 && esd_Ix > 0) {
+                        const rel_err_b_sq = Math.pow(rel_err_two_b, 2);
+                        const term_err_Ix_sq = Math.pow(esd_Ix / S, 2);
+                        const term_err_S_sq = Math.pow(Ix * esd_S / (S * S), 2);
+                        
+                        // (delta_alpha / alpha)^2 = 4*(delta_b/b)^2 + (delta_Ix/S)^2 + (Ix*delta_S/S^2)^2
+                        const rel_err_alpha_sq = 4 * rel_err_b_sq + term_err_Ix_sq + term_err_S_sq;
+                        
+                        esd_alpha_diffusivity_m2s = Math.abs(alpha_diffusivity_m2s) * Math.sqrt(rel_err_alpha_sq);
                     }
                 }
+                // --- CORRECTED THERMAL DIFFUSIVITY CALCULATION ENDS HERE ---
 
                 result.k = k;
                 result.esd_k = esd_k;
-                result.alpha = alpha_diffusivity_m2s * 1e6;
+                result.alpha = alpha_diffusivity_m2s * 1e6; // Convert from m^2/s to mm^2/s
                 result.esd_alpha = esd_alpha_diffusivity_m2s * 1e6;
                 result.inPhaseFitParams = { slope: inPhaseFit.slope, intercept: inPhaseFit.intercept };
                 result.outOfPhaseFitParams = { slope: outOfPhaseFit.slope, intercept: outOfPhaseFit.intercept };
@@ -1174,7 +1186,7 @@
                         pdf.addImage(canvas3.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, (canvas3.height * imgWidth1) / canvas3.width);
                     }
                 }
-                pdf.save(`3omega_report_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+                pdf.save(`3omega_report_corrected_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
             } catch (error) {
                 console.error("Error generating PDF:", error);
                 showError("An error occurred while generating the PDF. See browser console.");
