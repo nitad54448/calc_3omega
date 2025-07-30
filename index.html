@@ -846,15 +846,26 @@
                 if (tcr && tcr.value !== "unknown" && !isNaN(tcr.value)) {
                     generalInfoHTML += `<p>Calculated TCR: <strong>${tcr.value.toExponential(2)} ± ${tcr.esd.toExponential(1)} 1/K</strong></p>`;
                 }
-                if (!isNaN(f_min) && !isNaN(f_max)) {
-                    const formatFreq = (f) => {
-                        if (f > 1e6) return `${(f/1e6).toFixed(2)} MHz`;
-                        if (f > 1e3) return `${(f/1e3).toFixed(2)} kHz`;
-                        return `${f.toFixed(2)} Hz`;
-                    };
-                    generalInfoHTML += `<p title="f_min ensures substrate is thermally thick. f_max ensures 2D heat flow from the heater.">Recommended Fit Range: <strong>${f_min.toFixed(2)} Hz — ${formatFreq(f_max)}</strong></p>`;
-                    //les limites min max sont un peu trop strictes... dans les papiers de Uher (?) c'est plus large ()
+ if (!isNaN(f_min) && !isNaN(f_max)) {
+                    // Check if the calculated values are physically plausible at all
+                    if (f_min < 1e-6 || f_max > 1e11 || f_min >= f_max) {
+                         generalInfoHTML += `<p title="Calculation resulted in non-physical values.">Recommended Fit Range: <strong>N/A</strong></p>`;
+                    } else {
+                        // Clamp the values for a clean display
+                        const f_min_display = Math.max(0.001, f_min);
+                        const f_max_display = Math.min(1e6, f_max);
+
+                        const formatFreq = (f) => {
+                            if (f >= 1e6) return `${(f/1e6).toFixed(2)} MHz`;
+                            if (f >= 1e3) return `${(f/1e3).toFixed(2)} kHz`;
+                            return `${f.toFixed(2)} Hz`;
+                        };
+                         generalInfoHTML += `<p title="f_min ensures substrate is thermally thick. f_max ensures 2D heat flow from the heater. Values clamped to 1mHz-1MHz for display.">Recommended Fit Range: <strong>${formatFreq(f_min_display)} — ${formatFreq(f_max_display)}</strong></p>`;
+                    }
                 }
+
+          //les limites min max sont un peu trop strictes... dans les papiers de Uher (?) c'est plus large ()
+
                 generalInfoHTML += '</div>';
                 generalInfoContainer.innerHTML = generalInfoHTML;
                 resultsContainer.appendChild(generalInfoContainer);
