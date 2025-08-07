@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3-Omega 2D Fit Analyzer (v1.9)</title>
+    <title>3-Omega 2D Fit Analyzer (v2.1)</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -297,7 +297,7 @@
             </div>
         </div>
         <footer>
-            <span>3-Omega_Analyzer_2DFit v1.9</span>
+            <span>3-Omega_Analyzer_2DFit v2.1, 7 August 2025</span>
             <span>NitaD, Univ Paris-Saclay</span>
         </footer>
     </div>
@@ -1235,14 +1235,32 @@
                         tempPlotContainer.html('');
                         drawRvTPlot(analysisResults, tempPlotContainer);
                         const canvas2 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
-                        pdf.addImage(canvas2.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, (canvas2.height * imgWidth1) / canvas2.width);
-                        yPos += (canvas2.height * imgWidth1) / canvas2.width + 10;
+                        const imgHeight2 = (canvas2.height * imgWidth1) / canvas2.width;
+                        pdf.addImage(canvas2.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight2);
+                        yPos += imgHeight2 + 10;
                         
+                        // --- Plot for Conductivity vs Temp ---
                         if (yPos + 120 > pageHeight - margin) { pdf.addPage(); yPos = margin; }
                         tempPlotContainer.html('');
-                        drawPropertiesVsTempPlot(analysisResults, tempPlotContainer);
-                        const canvas3 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
-                        pdf.addImage(canvas3.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, (canvas3.height * imgWidth1) / canvas3.width);
+                        drawConductivityVsTempPlot(analysisResults, tempPlotContainer);
+                        let canvas3 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
+                        if (canvas3.height > 20) { // Simple check if something was drawn
+                            let imgHeight3 = (canvas3.height * imgWidth1) / canvas3.width;
+                            if (yPos + imgHeight3 > pageHeight - margin) { pdf.addPage(); yPos = margin; }
+                            pdf.addImage(canvas3.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight3);
+                            yPos += imgHeight3 + 10;
+                        }
+
+                        // --- Plot for Diffusivity vs Temp ---
+                        if (yPos + 120 > pageHeight - margin) { pdf.addPage(); yPos = margin; }
+                        tempPlotContainer.html('');
+                        drawDiffusivityVsTempPlot(analysisResults, tempPlotContainer);
+                        let canvas4 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
+                        if (canvas4.height > 20) { // Simple check if something was drawn
+                            let imgHeight4 = (canvas4.height * imgWidth1) / canvas4.width;
+                             if (yPos + imgHeight4 > pageHeight - margin) { pdf.addPage(); yPos = margin; }
+                            pdf.addImage(canvas4.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight4);
+                        }
                     }
                 }
                 pdf.save(`3omega_report_v1.9_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
@@ -1342,43 +1360,60 @@
             }
         }
 
-        //si Temp dispo
-        function drawPropertiesVsTempPlot(data, container) {
-            const plotData = data.filter(d => d.avg_temp > 0 && !isNaN(d.k) && !isNaN(d.alpha));
+        function drawConductivityVsTempPlot(data, container) {
+            const plotData = data.filter(d => d.avg_temp > 0 && !isNaN(d.k));
             if (plotData.length < 2) return;
-            const plotMargin = { top: 40, right: 60, bottom: 50, left: 60 };
+            const plotMargin = { top: 40, right: 40, bottom: 50, left: 60 };
             const width = 700 - plotMargin.left - plotMargin.right, height = 400 - plotMargin.top - plotMargin.bottom;
             const svg = container.append("svg").attr("width", width + plotMargin.left + plotMargin.right).attr("height", height + plotMargin.top + plotMargin.bottom).append("g").attr("transform", `translate(${plotMargin.left},${plotMargin.top})`);
             
             const [k_min, k_max] = d3.extent(plotData, d => d.k);
-            const [alpha_min, alpha_max] = d3.extent(plotData, d => d.alpha);
 
             const xScale = d3.scaleLinear().domain(d3.extent(plotData, d => d.avg_temp)).range([0, width]).nice();
-            const y1Scale = d3.scaleLinear().domain([k_min * 0.9, k_max * 1.1]).range([height, 0]).nice();
-            const y2Scale = d3.scaleLinear().domain([alpha_min * 0.9, alpha_max * 1.1]).range([height, 0]).nice();
+            const yScale = d3.scaleLinear().domain([k_min * 0.9, k_max * 1.1]).range([height, 0]).nice();
 
             svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(xScale));
-            svg.append("g").call(d3.axisLeft(y1Scale).tickFormat(d3.format(".2s"))).style("color", "#1E40AF");
-            svg.append("g").attr("transform", `translate(${width},0)`).call(d3.axisRight(y2Scale).tickFormat(d3.format(".2s"))).style("color", "#B45309");
+            svg.append("g").call(d3.axisLeft(yScale).tickFormat(d3.format(".2s"))).style("color", "#1E40AF");
 
             svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", height + 40).text("Temperature (K)");
             svg.append("text").attr("text-anchor", "middle").attr("transform", "rotate(-90)").attr("y", -plotMargin.left + 20).attr("x", -height / 2).text("Thermal Conductivity (k) [W/mK]").style("fill", "#1E40AF");
-            svg.append("text").attr("text-anchor", "middle").attr("transform", "rotate(90)").attr("y", -width - plotMargin.right + 20).attr("x", height / 2).text("Thermal Diffusivity (α) [mm²/s]").style("fill", "#B45309");
-            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", -15).text("Thermal Properties vs. Temperature").style("font-size", "16px").style("font-weight", "bold");
+            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", -15).text("Thermal Conductivity vs. Temperature").style("font-size", "16px").style("font-weight", "bold");
 
             const capWidth = 4;
             const errK = svg.selectAll(".err-k-t").data(plotData).enter().append("g").style("stroke", "#1E40AF");
-            errK.append("line").attr("x1", d => xScale(d.avg_temp)).attr("x2", d => xScale(d.avg_temp)).attr("y1", d => y1Scale(d.k - d.esd_k)).attr("y2", d => y1Scale(d.k + d.esd_k));
-            errK.append("line").attr("x1", d => xScale(d.avg_temp) - capWidth).attr("x2", d => xScale(d.avg_temp) + capWidth).attr("y1", d => y1Scale(d.k + d.esd_k)).attr("y2", d => y1Scale(d.k + d.esd_k));
-            errK.append("line").attr("x1", d => xScale(d.avg_temp) - capWidth).attr("x2", d => xScale(d.avg_temp) + capWidth).attr("y1", d => y1Scale(d.k - d.esd_k)).attr("y2", d => y1Scale(d.k - d.esd_k));
+            errK.append("line").attr("x1", d => xScale(d.avg_temp)).attr("x2", d => xScale(d.avg_temp)).attr("y1", d => yScale(d.k - d.esd_k)).attr("y2", d => yScale(d.k + d.esd_k));
+            errK.append("line").attr("x1", d => xScale(d.avg_temp) - capWidth).attr("x2", d => xScale(d.avg_temp) + capWidth).attr("y1", d => yScale(d.k + d.esd_k)).attr("y2", d => yScale(d.k + d.esd_k));
+            errK.append("line").attr("x1", d => xScale(d.avg_temp) - capWidth).attr("x2", d => xScale(d.avg_temp) + capWidth).attr("y1", d => yScale(d.k - d.esd_k)).attr("y2", d => yScale(d.k - d.esd_k));
             
-            const errAlpha = svg.selectAll(".err-alpha-t").data(plotData).enter().append("g").style("stroke", "#B45309");
-            errAlpha.append("line").attr("x1", d => xScale(d.avg_temp)).attr("x2", d => xScale(d.avg_temp)).attr("y1", d => y2Scale(d.alpha - d.esd_alpha)).attr("y2", d => y2Scale(d.alpha + d.esd_alpha));
-            errAlpha.append("line").attr("x1", d => xScale(d.avg_temp) - capWidth).attr("x2", d => xScale(d.avg_temp) + capWidth).attr("y1", d => y2Scale(d.alpha + d.esd_alpha)).attr("y2", d => y2Scale(d.alpha + d.esd_alpha));
-            errAlpha.append("line").attr("x1", d => xScale(d.avg_temp) - capWidth).attr("x2", d => xScale(d.avg_temp) + capWidth).attr("y1", d => y2Scale(d.alpha - d.esd_alpha)).attr("y2", d => y2Scale(d.alpha - d.esd_alpha));
+            svg.selectAll(".dot-k-t").data(plotData).enter().append("circle").attr("cx", d => xScale(d.avg_temp)).attr("cy", d => yScale(d.k)).attr("r", 5).style("fill", "#1E40AF");
+        }
 
-            svg.selectAll(".dot-k-t").data(plotData).enter().append("circle").attr("cx", d => xScale(d.avg_temp)).attr("cy", d => y1Scale(d.k)).attr("r", 5).style("fill", "#1E40AF");
-            svg.selectAll(".dot-alpha-t").data(plotData).enter().append("circle").attr("cx", d => xScale(d.avg_temp)).attr("cy", d => y2Scale(d.alpha)).attr("r", 5).style("fill", "#B45309");
+        function drawDiffusivityVsTempPlot(data, container) {
+            const plotData = data.filter(d => d.avg_temp > 0 && !isNaN(d.alpha));
+            if (plotData.length < 2) return;
+            const plotMargin = { top: 40, right: 40, bottom: 50, left: 60 };
+            const width = 700 - plotMargin.left - plotMargin.right, height = 400 - plotMargin.top - plotMargin.bottom;
+            const svg = container.append("svg").attr("width", width + plotMargin.left + plotMargin.right).attr("height", height + plotMargin.top + plotMargin.bottom).append("g").attr("transform", `translate(${plotMargin.left},${plotMargin.top})`);
+            
+            const [alpha_min, alpha_max] = d3.extent(plotData, d => d.alpha);
+
+            const xScale = d3.scaleLinear().domain(d3.extent(plotData, d => d.avg_temp)).range([0, width]).nice();
+            const yScale = d3.scaleLinear().domain([alpha_min * 0.9, alpha_max * 1.1]).range([height, 0]).nice();
+
+            svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(xScale));
+            svg.append("g").call(d3.axisLeft(yScale).tickFormat(d3.format(".2s"))).style("color", "#B45309");
+
+            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", height + 40).text("Temperature (K)");
+            svg.append("text").attr("text-anchor", "middle").attr("transform", "rotate(-90)").attr("y", -plotMargin.left + 20).attr("x", -height / 2).text("Thermal Diffusivity (α) [mm²/s]").style("fill", "#B45309");
+            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", -15).text("Thermal Diffusivity vs. Temperature").style("font-size", "16px").style("font-weight", "bold");
+
+            const capWidth = 4;
+            const errAlpha = svg.selectAll(".err-alpha-t").data(plotData).enter().append("g").style("stroke", "#B45309");
+            errAlpha.append("line").attr("x1", d => xScale(d.avg_temp)).attr("x2", d => xScale(d.avg_temp)).attr("y1", d => yScale(d.alpha - d.esd_alpha)).attr("y2", d => yScale(d.alpha + d.esd_alpha));
+            errAlpha.append("line").attr("x1", d => xScale(d.avg_temp) - capWidth).attr("x2", d => xScale(d.avg_temp) + capWidth).attr("y1", d => yScale(d.alpha + d.esd_alpha)).attr("y2", d => yScale(d.alpha + d.esd_alpha));
+            errAlpha.append("line").attr("x1", d => xScale(d.avg_temp) - capWidth).attr("x2", d => xScale(d.avg_temp) + capWidth).attr("y1", d => yScale(d.alpha - d.esd_alpha)).attr("y2", d => yScale(d.alpha - d.esd_alpha));
+
+            svg.selectAll(".dot-alpha-t").data(plotData).enter().append("circle").attr("cx", d => xScale(d.avg_temp)).attr("cy", d => yScale(d.alpha)).attr("r", 5).style("fill", "#B45309");
         }
 
 
