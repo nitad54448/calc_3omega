@@ -1221,49 +1221,63 @@
                     pdf.setFontSize(16).text("Analysis Summary", pageWidth / 2, yPos, { align: 'center' });
                     yPos += 10;
                     
+                    // --- Plot 1: Add UNCONDITIONALLY to the new page ---
                     tempPlotContainer.html(''); 
                     drawSummaryPlot(analysisResults, tempPlotContainer);
                     let canvas1 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
                     let imgWidth1 = pageWidth - 2 * margin;
-                    let imgHeight1 = (canvas1.height * imgWidth1) / canvas1.width;
-                    pdf.addImage(canvas1.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight1);
-                    yPos += imgHeight1 + 10;
+                    if (canvas1.height > 20) {
+                        let imgHeight1 = (canvas1.height * imgWidth1) / canvas1.width;
+                        pdf.addImage(canvas1.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight1);
+                        yPos += imgHeight1 + 10;
+                    }
 
                     const temps = analysisResults.map(d => d.avg_temp).filter(t => t > 0);
                     if (new Set(temps).size > 1) {
-                        if (yPos + 120 > pageHeight - margin) { pdf.addPage(); yPos = margin; }
+                        
+                        // --- Plot 2: CHECK if it fits BEFORE adding ---
                         tempPlotContainer.html('');
                         drawRvTPlot(analysisResults, tempPlotContainer);
                         const canvas2 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
-                        const imgHeight2 = (canvas2.height * imgWidth1) / canvas2.width;
-                        pdf.addImage(canvas2.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight2);
-                        yPos += imgHeight2 + 10;
+                        if (canvas2.height > 20) {
+                            const imgHeight2 = (canvas2.height * imgWidth1) / canvas2.width;
+                            if (yPos + imgHeight2 > pageHeight - margin) {
+                                pdf.addPage(); 
+                                yPos = margin; 
+                            }
+                            pdf.addImage(canvas2.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight2);
+                            yPos += imgHeight2 + 10;
+                        }
                         
-                        // --- Plot for Conductivity vs Temp ---
-                        if (yPos + 120 > pageHeight - margin) { pdf.addPage(); yPos = margin; }
+                        // --- Plot 3: CHECK if it fits BEFORE adding ---
                         tempPlotContainer.html('');
                         drawConductivityVsTempPlot(analysisResults, tempPlotContainer);
                         let canvas3 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
-                        if (canvas3.height > 20) { // Simple check if something was drawn
+                        if (canvas3.height > 20) {
                             let imgHeight3 = (canvas3.height * imgWidth1) / canvas3.width;
-                            if (yPos + imgHeight3 > pageHeight - margin) { pdf.addPage(); yPos = margin; }
+                            if (yPos + imgHeight3 > pageHeight - margin) {
+                                pdf.addPage(); 
+                                yPos = margin; 
+                            }
                             pdf.addImage(canvas3.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight3);
                             yPos += imgHeight3 + 10;
                         }
 
-                        // --- Plot for Diffusivity vs Temp ---
-                        if (yPos + 120 > pageHeight - margin) { pdf.addPage(); yPos = margin; }
+                        // --- Plot 4: CHECK if it fits BEFORE adding ---
                         tempPlotContainer.html('');
                         drawDiffusivityVsTempPlot(analysisResults, tempPlotContainer);
                         let canvas4 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
-                        if (canvas4.height > 20) { // Simple check if something was drawn
+                        if (canvas4.height > 20) {
                             let imgHeight4 = (canvas4.height * imgWidth1) / canvas4.width;
-                             if (yPos + imgHeight4 > pageHeight - margin) { pdf.addPage(); yPos = margin; }
+                             if (yPos + imgHeight4 > pageHeight - margin) {
+                                pdf.addPage(); 
+                                yPos = margin; 
+                             }
                             pdf.addImage(canvas4.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight4);
                         }
                     }
                 }
-                pdf.save(`3omega_report_v1.9_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+                pdf.save(`3omega_report_v2.1_final_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
             } catch (error) {
                 console.error("Error generating PDF:", error);
                 showError("An error occurred while generating the PDF. See browser console.");
