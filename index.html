@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3-Omega 2D Fit Analyzer (v2.1)</title>
+    <title>3-Omega 2D Fit Analyzer (v2.2)</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -297,7 +297,7 @@
             </div>
         </div>
         <footer>
-            <span>3-Omega_Analyzer_2DFit v2.1, 7 August 2025</span>
+            <span>3-Omega_Analyzer_2DFit v2.2, 9 August 2025</span>
             <span>NitaD, Univ Paris-Saclay</span>
         </footer>
     </div>
@@ -315,7 +315,6 @@
         document.getElementById('file-upload').addEventListener('change', handleFileSelect, false);
         
         // --- Event Listeners ---
-        //p'tain de ref de chez Keithley, 1 usec pulse, pour 6221 et MFLI, cherche le lock dans Aux-IN, ou avec un autre demod
         const globalParamIds = ['wire-length', 'esd-wire-length-ppm', 'wire-width', 'esd-wire-width-ppm', 'tcr', 'esd-tcr-ppm', 'thickness-substrate', 'phase-shift-180'];
         globalParamIds.forEach(id => {
             document.getElementById(id)?.addEventListener('change', () => {
@@ -398,7 +397,7 @@
                     document.getElementById('fitting-controls').classList.remove('hidden');
                     document.getElementById('save-report-btn').classList.remove('hidden');
                     setupFittingSliders();
-                    analyzeAndDisplay(true); // calcul au début... pas idéal, suivant la taille du fichier
+                    analyzeAndDisplay(true);
                 } else {
                     showError("Could not parse any valid datasets from the file.");
                     document.getElementById('fitting-controls').classList.add('hidden');
@@ -629,8 +628,8 @@
             const two_b = parseFloat(document.getElementById('wire-width').value) * 1e-3;
             const esd_two_b_ppm = parseFloat(document.getElementById('esd-wire-width-ppm').value);
             const rel_err_two_b = esd_two_b_ppm / 1e6;
-            const b = two_b / 2; //c'est du lourd ;-)... ça aurait été plus facile de définir b avec parseFloat et utiliser 2*b dans les formules... à voir plus tard
-            const C_min = 4; //les constantes pour le domaine de linéairité
+            const b = two_b / 2;
+            const C_min = 4;
             const C_max = 5;
             const alpha_tcr = parseFloat(document.getElementById('tcr').value);
             const esd_tcr_ppm = parseFloat(document.getElementById('esd-tcr-ppm').value);
@@ -639,10 +638,21 @@
             const fitMethod = document.getElementById('fit-method').value;
             const applyPhaseCorrection = document.getElementById('phase-shift-180').checked;
             const phaseFactor = applyPhaseCorrection ? -1 : 1;
-            // Keithley 6221 donne des pulses et le lock-in les retrouve à -180; et des fois on les trouve plus... dur en dessous de 1Hz
-            // à tester avec la LK155, mais le V min est à 10V, .. risque de griller le MFLI (max 3V en entrée)
-            // ---  core calculation logic as a separate function
+
             const performAnalysisOnDataset = (result, fitRange) => {
+                // Calculate max power per unit length
+                if (result.data && result.data.length > 0 && result.R0 > 0 && L > 0) {
+                    const maxCurrent = d3.max(result.data, d => d.current);
+                    if (maxCurrent > 0) {
+                        const maxPower = result.R0 * Math.pow(maxCurrent, 2);
+                        result.maxPowerPerLength = maxPower / L;
+                    } else {
+                        result.maxPowerPerLength = NaN;
+                    }
+                } else {
+                    result.maxPowerPerLength = NaN;
+                }
+
                 result.processedData.forEach(p => {
                     if (p.v3_in_phase_norm_uncorrected === undefined) p.v3_in_phase_norm_uncorrected = p.v3_in_phase_norm;
                     if (p.v3_out_of_phase_norm_uncorrected === undefined) p.v3_out_of_phase_norm_uncorrected = p.v3_out_of_phase_norm;
@@ -669,7 +679,6 @@
                     const rel_err_tcr_sq = Math.pow(rel_err_tcr, 2);
                     const rel_err_L_sq = Math.pow(rel_err_L, 2);
                     esd_k = Math.abs(k) * Math.sqrt(rel_err_slope_sq + rel_err_R0_sq + rel_err_tcr_sq + rel_err_L_sq);
-                //pas sur de cette formule de propagation des erreurs, à vérifier
                 }
                 
                 let alpha_diffusivity_m2s = NaN, esd_alpha_diffusivity_m2s = NaN;
@@ -707,7 +716,7 @@
                     performAnalysisOnDataset(result, { min: result.minFitFreq, max: result.maxFitFreq });
                 });
             } else {
-                // Local analysis: pour les données affichées
+                // Local analysis: for the currently displayed dataset
                 const result = analysisResults[selectedDatasetIndex];
                 if (result) {
                     const minFitFreq = parseFloat(document.getElementById('fit-fmin').value);
@@ -846,12 +855,10 @@
                 if (tcr && tcr.value !== "unknown" && !isNaN(tcr.value)) {
                     generalInfoHTML += `<p>Calculated TCR: <strong>${tcr.value.toExponential(2)} ± ${tcr.esd.toExponential(1)} 1/K</strong></p>`;
                 }
- if (!isNaN(f_min) && !isNaN(f_max)) {
-                    // Check if the calculated values are physically plausible at all
+                if (!isNaN(f_min) && !isNaN(f_max)) {
                     if (f_min < 1e-6 || f_max > 1e11 || f_min >= f_max) {
                          generalInfoHTML += `<p title="Calculation resulted in non-physical values.">Recommended Fit Range: <strong>N/A</strong></p>`;
                     } else {
-                        // Clamp the values for a clean display
                         const f_min_display = Math.max(0.001, f_min);
                         const f_max_display = Math.min(1e6, f_max);
 
@@ -863,9 +870,6 @@
                          generalInfoHTML += `<p title="f_min ensures substrate is thermally thick. f_max ensures 2D heat flow from the heater. Values clamped to 1mHz-1MHz for display.">Recommended Fit Range: <strong>${formatFreq(f_min_display)} — ${formatFreq(f_max_display)}</strong></p>`;
                     }
                 }
-
-          //les limites min max sont un peu trop strictes... dans les papiers de Uher (?) c'est plus large ()
-
                 generalInfoHTML += '</div>';
                 generalInfoContainer.innerHTML = generalInfoHTML;
                 resultsContainer.appendChild(generalInfoContainer);
@@ -923,12 +927,18 @@
             if(!isNaN(result.alpha)) {
                 alpha_text = `<strong>${result.alpha.toExponential(3)} ± ${result.esd_alpha.toExponential(1)} mm²/s</strong>`;
             }
+
+            let maxPowerText = '...';
+            if (!isNaN(result.maxPowerPerLength)) {
+                maxPowerText = `<strong>${result.maxPowerPerLength.toFixed(2)} W/m</strong>`;
+            }
             
             cardContainer.innerHTML = `
                 <div class="results-card">
                     <h3>Dataset: ${formatTimestamp(result.timestamp)}</h3>
                     <p>Avg Temperature: <strong>${result.avg_temp > 0 ? result.avg_temp.toFixed(2) + ' K' : 'N/A'}</strong></p>
                     <p>Resistance (R₀): <strong>${result.R0.toFixed(2)} ± ${result.esd_R0.toExponential(1)} Ω</strong></p>
+                    <p>Max Power: ${maxPowerText}</p>
                     <p>Thermal Cond. (k): <strong>${!isNaN(result.k) ? result.k.toExponential(3) + ' ± ' + result.esd_k.toExponential(1) : '...'} W/mK</strong></p>
                     <p>Thermal Diff. (α): ${alpha_text}</p>
                 </div>`;
@@ -1190,6 +1200,8 @@
 
                     pdf.text(sanitizeForPDF(`Avg Temperature: ${result.avg_temp > 0 ? result.avg_temp.toFixed(2) + ' K' : 'N/A'}`), col2_x, yPos_col2); yPos_col2 += 6;
                     pdf.text(sanitizeForPDF(`Resistance (R₀): ${result.R0.toFixed(2)} ± ${result.esd_R0.toExponential(1)} Ω`), col2_x, yPos_col2); yPos_col2 += 6;
+                    const max_power_text_pdf = !isNaN(result.maxPowerPerLength) ? `${result.maxPowerPerLength.toFixed(2)} W/m` : 'N/A';
+                    pdf.text(sanitizeForPDF(`Max Power: ${max_power_text_pdf}`), col2_x, yPos_col2); yPos_col2 += 6;
                     const k_text_pdf = !isNaN(result.k) ? `${result.k.toExponential(3)} ± ${result.esd_k.toExponential(1)} W/mK` : 'N/A';
                     pdf.text(sanitizeForPDF(`Thermal Conductivity (k): ${k_text_pdf}`), col2_x, yPos_col2); yPos_col2 += 6;
                     const alpha_text_pdf = !isNaN(result.alpha) ? `${result.alpha.toExponential(3)} ± ${result.esd_alpha.toExponential(1)} mm²/s` : 'N/A';
@@ -1221,7 +1233,6 @@
                     pdf.setFontSize(16).text("Analysis Summary", pageWidth / 2, yPos, { align: 'center' });
                     yPos += 10;
                     
-                    // --- Plot 1: Add UNCONDITIONALLY to the new page ---
                     tempPlotContainer.html(''); 
                     drawSummaryPlot(analysisResults, tempPlotContainer);
                     let canvas1 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
@@ -1235,7 +1246,6 @@
                     const temps = analysisResults.map(d => d.avg_temp).filter(t => t > 0);
                     if (new Set(temps).size > 1) {
                         
-                        // --- Plot 2: CHECK if it fits BEFORE adding ---
                         tempPlotContainer.html('');
                         drawRvTPlot(analysisResults, tempPlotContainer);
                         const canvas2 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
@@ -1249,7 +1259,6 @@
                             yPos += imgHeight2 + 10;
                         }
                         
-                        // --- Plot 3: CHECK if it fits BEFORE adding ---
                         tempPlotContainer.html('');
                         drawConductivityVsTempPlot(analysisResults, tempPlotContainer);
                         let canvas3 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
@@ -1263,7 +1272,6 @@
                             yPos += imgHeight3 + 10;
                         }
 
-                        // --- Plot 4: CHECK if it fits BEFORE adding ---
                         tempPlotContainer.html('');
                         drawDiffusivityVsTempPlot(analysisResults, tempPlotContainer);
                         let canvas4 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
@@ -1277,7 +1285,7 @@
                         }
                     }
                 }
-                pdf.save(`3omega_report_v2.1_final_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+                pdf.save(`3omega_report_v2.2_final_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
             } catch (error) {
                 console.error("Error generating PDF:", error);
                 showError("An error occurred while generating the PDF. See browser console.");
@@ -1290,8 +1298,6 @@
                 btn.disabled = false;
             }
         }
-
-// les graphs en plus, si pas de Temp, pas de TCR, rien à dessiner
 
         function drawSummaryPlot(data, container) {
             const plotMargin = { top: 40, right: 60, bottom: 50, left: 60 };
