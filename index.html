@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3-Omega 2D Fit Analyzer (v2.5)</title>
+    <title>3-Omega 2D Fit Analyzer</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -211,6 +211,16 @@
             flex-direction: column;
             gap: 10px;
         }
+
+        .control-group-checkbox {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 18px;
+        }
+        .control-group-checkbox label {
+            margin-bottom: 0; /* Override default block margin */
+        }
     </style>
 </head>
 <body>
@@ -230,7 +240,7 @@
                     </div>
                 </div>
 
-                <div class="control-group">
+                <div class="control-group-checkbox">
                     <label for="phase-shift-180">Apply 180° Phase Correction</label>
                     <input type="checkbox" id="phase-shift-180" style="width: 20px; height: 20px; cursor: pointer;">
                 </div>
@@ -253,24 +263,23 @@
                         <span>ppm</span>
                     </div>
                 </div>
-
-                <h2>Resistance vs. Temp: R(T) = C₂T² + C₁T + C₀</h2>
                 <div class="control-group">
-                    <label for="tcr-c0">Coefficient C₀ [Ω]</label>
+                    <label for="thickness-substrate">Substrate Thickness (dₛ) [mm]</label>
+                    <input type="number" id="thickness-substrate" value="3">
+                </div>
+
+                <h2>R(T) = C₂T² + C₁T + C₀</h2>
+                <div class="control-group">
+                    <label for="tcr-c0">C0 (Ohm)</label>
                     <input type="number" id="tcr-c0" value="0" step="any">
                 </div>
                 <div class="control-group">
-                    <label for="tcr-c1">Coefficient C₁ [Ω/K]</label>
+                    <label for="tcr-c1">C1 (Ohm/K)</label>
                     <input type="number" id="tcr-c1" value="0.0035" step="any">
                 </div>
                 <div class="control-group">
-                    <label for="tcr-c2">Coefficient C₂ [Ω/K²]</label>
+                    <label for="tcr-c2">C2 (Ohm/K^2)</label>
                     <input type="number" id="tcr-c2" value="0" step="any">
-                </div>
-
-                 <div class="control-group">
-                    <label for="thickness-substrate">Substrate Thickness (dₛ) [mm]</label>
-                    <input type="number" id="thickness-substrate" value="3">
                 </div>
 
                 <div id="fitting-controls" class="hidden">
@@ -307,7 +316,7 @@
             </div>
         </div>
         <footer>
-            <span>3-Omega_Analyzer_2DFit v2.5, 9 August 2025</span>
+            <span>3-Omega_Analyzer_2DFit v2.6, 9 August 2025</span>
             <span>NitaD, Univ Paris-Saclay</span>
         </footer>
     </div>
@@ -1368,7 +1377,7 @@
                         }
                     }
                 }
-                pdf.save(`3omega_report_v2.5_final_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+                pdf.save(`3omega_report_v2.6_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
             } catch (error) {
                 console.error("Error generating PDF:", error);
                 showError("An error occurred while generating the PDF. See browser console.");
