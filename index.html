@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3-Omega 2D Fit Analyzer (v2.2)</title>
+    <title>3-Omega 2D Fit Analyzer (v2.3)</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -250,14 +250,21 @@
                         <span>ppm</span>
                     </div>
                 </div>
+
+                <h2>R(T) Fit Parameters (R = C₂T² + C₁T + C₀)</h2>
                 <div class="control-group">
-                    <label for="tcr">TCR (α) [1/K]</label>
-                    <div class="control-row-with-error">
-                        <input type="number" id="tcr" value="0.0035">
-                        <input type="number" id="esd-tcr-ppm" value="5000" title="Uncertainty in ppm">
-                        <span>ppm</span>
-                    </div>
+                    <label for="tcr-c0">Coefficient C₀ [Ω]</label>
+                    <input type="number" id="tcr-c0" value="0" step="any">
                 </div>
+                <div class="control-group">
+                    <label for="tcr-c1">Coefficient C₁ [Ω/K]</label>
+                    <input type="number" id="tcr-c1" value="0.0035" step="any">
+                </div>
+                <div class="control-group">
+                    <label for="tcr-c2">Coefficient C₂ [Ω/K²]</label>
+                    <input type="number" id="tcr-c2" value="0" step="any">
+                </div>
+
                  <div class="control-group">
                     <label for="thickness-substrate">Substrate Thickness (dₛ) [mm]</label>
                     <input type="number" id="thickness-substrate" value="3">
@@ -297,7 +304,7 @@
             </div>
         </div>
         <footer>
-            <span>3-Omega_Analyzer_2DFit v2.2, 9 August 2025</span>
+            <span>3-Omega_Analyzer_2DFit v2.3, 9 August 2025</span>
             <span>NitaD, Univ Paris-Saclay</span>
         </footer>
     </div>
@@ -315,7 +322,7 @@
         document.getElementById('file-upload').addEventListener('change', handleFileSelect, false);
         
         // --- Event Listeners ---
-        const globalParamIds = ['wire-length', 'esd-wire-length-ppm', 'wire-width', 'esd-wire-width-ppm', 'tcr', 'esd-tcr-ppm', 'thickness-substrate', 'phase-shift-180'];
+        const globalParamIds = ['wire-length', 'esd-wire-length-ppm', 'wire-width', 'esd-wire-width-ppm', 'tcr-c0', 'tcr-c1', 'tcr-c2', 'thickness-substrate', 'phase-shift-180'];
         globalParamIds.forEach(id => {
             document.getElementById(id)?.addEventListener('change', () => {
                  if (parsedFileContent.datasets.length > 0) analyzeAndDisplay(true); // Pass true for global analysis
@@ -364,25 +371,23 @@
                 const contents = e.target.result;
                 parsedFileContent = parseData(contents);
                 if (parsedFileContent.datasets.length > 0) {
-                    let tcr_result = { value: "unknown", esd: "" };
+                    
+                    // --- R(T) Polynomial Fit Section ---
                     const tcr_data = parsedFileContent.datasets
                         .map(ds => ({ x: ds.avg_temp, y: ds.R0, sigma: ds.esd_R0 }))
                         .filter(d => !isNaN(d.x) && !isNaN(d.y) && d.x > 0);
 
                     const uniqueTemps = new Set(tcr_data.map(d => d.x));
                     if (tcr_data.length >= 2 && uniqueTemps.size >= 2) {
-                        const fit = robustLinearRegression(tcr_data, 'x', 'y', 'sigma');
-                        if (fit.slope !== 0) {
-                            const avg_R = d3.mean(tcr_data, d => d.y);
-                            const tcr_val = (1 / avg_R) * fit.slope;
-                            const rel_err_slope_sq = Math.pow(fit.esd_slope / fit.slope, 2);
-                            const std_dev_R = d3.deviation(tcr_data, d => d.y) || 0;
-                            const rel_err_R_sq = Math.pow(std_dev_R / avg_R, 2);
-                            const tcr_esd = Math.abs(tcr_val) * Math.sqrt(rel_err_slope_sq + rel_err_R_sq);
-                            tcr_result = { value: tcr_val, esd: tcr_esd };
+                        const fit_coeffs = weightedPolynomialRegression2ndOrder(tcr_data);
+                        if (fit_coeffs.success) {
+                            parsedFileContent.rt_fit_coefficients = fit_coeffs;
+                            // Update the UI input fields with the calculated values
+                            document.getElementById('tcr-c0').value = fit_coeffs.c0.toExponential(4);
+                            document.getElementById('tcr-c1').value = fit_coeffs.c1.toExponential(4);
+                            document.getElementById('tcr-c2').value = fit_coeffs.c2.toExponential(4);
                         }
                     }
-                    parsedFileContent.calculated_tcr = tcr_result;
                     
                     const allFreqs = parsedFileContent.datasets.flatMap(ds => ds.data.map(d => d.freq));
                     const globalMinFreq = Math.max(0.01, Math.min(...allFreqs));
@@ -631,15 +636,32 @@
             const b = two_b / 2;
             const C_min = 4;
             const C_max = 5;
-            const alpha_tcr = parseFloat(document.getElementById('tcr').value);
-            const esd_tcr_ppm = parseFloat(document.getElementById('esd-tcr-ppm').value);
-            const rel_err_tcr = esd_tcr_ppm / 1e6;
             const d_s = parseFloat(document.getElementById('thickness-substrate').value) * 1e-3;
             const fitMethod = document.getElementById('fit-method').value;
             const applyPhaseCorrection = document.getElementById('phase-shift-180').checked;
             const phaseFactor = applyPhaseCorrection ? -1 : 1;
 
             const performAnalysisOnDataset = (result, fitRange) => {
+                // Read the R(T) coefficients from the UI. They are either from the fit or manually entered.
+                const C0 = parseFloat(document.getElementById('tcr-c0').value);
+                const C1 = parseFloat(document.getElementById('tcr-c1').value);
+                const C2 = parseFloat(document.getElementById('tcr-c2').value);
+
+                // Calculate local TCR for this specific dataset's temperature
+                let alpha_tcr = 0;
+                if (result.avg_temp > 0) {
+                    const temp = result.avg_temp;
+                    const R_at_T = C2 * temp * temp + C1 * temp + C0;
+                    const dR_dT = 2 * C2 * temp + C1;
+                    if (R_at_T > 0) {
+                        alpha_tcr = (1 / R_at_T) * dR_dT;
+                    }
+                }
+                result.local_tcr = alpha_tcr; // Store for reporting
+                
+                // For simplicity, TCR uncertainty propagation is removed for now.
+                const rel_err_tcr_sq = 0; 
+                
                 // Calculate max power per unit length
                 if (result.data && result.data.length > 0 && result.R0 > 0 && L > 0) {
                     const maxCurrent = d3.max(result.data, d => d.current);
@@ -676,7 +698,6 @@
                     k = -(Math.pow(result.R0, 2) * alpha_tcr) / (4 * Math.PI * L * inPhaseFit.slope);
                     const rel_err_slope_sq = Math.pow(inPhaseFit.esd_slope / inPhaseFit.slope, 2);
                     const rel_err_R0_sq = (result.R0 > 0 && result.esd_R0 > 0) ? 4 * Math.pow(result.esd_R0 / result.R0, 2) : 0;
-                    const rel_err_tcr_sq = Math.pow(rel_err_tcr, 2);
                     const rel_err_L_sq = Math.pow(rel_err_L, 2);
                     esd_k = Math.abs(k) * Math.sqrt(rel_err_slope_sq + rel_err_R0_sq + rel_err_tcr_sq + rel_err_L_sq);
                 }
@@ -736,6 +757,60 @@
 
             renderResultsUI();
             updatePlotForCurrentSelection();
+        }
+
+        /**
+         * Performs a weighted 2nd-order polynomial regression (y = c2*x^2 + c1*x + c0).
+         * Solves the normal equations using Cramer's rule for a 3x3 system.
+         * @param {Array<Object>} data - Array of points {x, y, sigma}.
+         * @returns {Object} An object with coefficients {c0, c1, c2} and a success flag.
+         */
+        function weightedPolynomialRegression2ndOrder(data) {
+            const pointsToFit = data.filter(d => d.sigma > 0 && !isNaN(d.y));
+            const n = pointsToFit.length;
+
+            if (n < 2) return { success: false, c0: 0, c1: 0, c2: 0 };
+            if (n < 3) { // Fallback to linear regression
+                const fit = weightedLinearRegression(pointsToFit, 'x', 'y', 'sigma');
+                return { success: true, c0: fit.intercept, c1: fit.slope, c2: 0 };
+            }
+
+            let S_w = 0, S_wx = 0, S_wy = 0, S_wx2 = 0, S_wxy = 0, S_wx3 = 0, S_wx2y = 0, S_wx4 = 0;
+
+            for (const p of pointsToFit) {
+                const w = 1 / (p.sigma * p.sigma);
+                const wx = w * p.x;
+                const wy = w * p.y;
+                const wx2 = wx * p.x;
+                S_w += w;
+                S_wx += wx;
+                S_wy += wy;
+                S_wx2 += wx2;
+                S_wxy += wx * p.y;
+                S_wx3 += wx2 * p.x;
+                S_wx2y += wx2 * p.y;
+                S_wx4 += wx2 * p.x * p.x;
+            }
+            
+            // Matrix A for the normal equations
+            const A = [
+                [S_w, S_wx, S_wx2],
+                [S_wx, S_wx2, S_wx3],
+                [S_wx2, S_wx3, S_wx4]
+            ];
+            // Vector B
+            const B = [S_wy, S_wxy, S_wx2y];
+
+            const detA = A[0][0]*(A[1][1]*A[2][2] - A[1][2]*A[2][1]) - A[0][1]*(A[1][0]*A[2][2] - A[1][2]*A[2][0]) + A[0][2]*(A[1][0]*A[2][1] - A[1][1]*A[2][0]);
+
+            if (Math.abs(detA) < 1e-12) return { success: false, c0: 0, c1: 0, c2: 0 };
+
+            // Solve for c0, c1, c2 using Cramer's rule
+            const detA0 = B[0]*(A[1][1]*A[2][2] - A[1][2]*A[2][1]) - A[0][1]*(B[1]*A[2][2] - A[1][2]*B[2]) + A[0][2]*(B[1]*A[2][1] - A[1][1]*B[2]);
+            const detA1 = A[0][0]*(B[1]*A[2][2] - A[1][2]*B[2]) - B[0]*(A[1][0]*A[2][2] - A[1][2]*A[2][0]) + A[0][2]*(A[1][0]*B[2] - B[1]*A[2][0]);
+            const detA2 = A[0][0]*(A[1][1]*B[2] - B[1]*A[2][1]) - A[0][1]*(A[1][0]*B[2] - B[1]*A[2][0]) + B[0]*(A[1][0]*A[2][1] - A[1][1]*A[2][0]);
+
+            return { success: true, c0: detA0 / detA, c1: detA1 / detA, c2: detA2 / detA };
         }
 
         function weightedLinearRegression(data, xKey, yKey, sigmaKey) {
@@ -844,17 +919,21 @@
             resultsContainer.innerHTML = '';
             if (analysisResults.length === 0) return;
 
-            const tcr = parsedFileContent.calculated_tcr;
+            const coeffs = parsedFileContent.rt_fit_coefficients;
             const f_min = parsedFileContent.global_f_min_linearity;
             const f_max = parsedFileContent.global_f_max_linearity;
-            let hasGeneralInfo = (tcr && tcr.value !== "unknown" && !isNaN(tcr.value)) || (!isNaN(f_min) && !isNaN(f_max));
+            let hasGeneralInfo = !!coeffs || (!isNaN(f_min) && !isNaN(f_max));
 
             if (hasGeneralInfo) {
                 const generalInfoContainer = document.createElement('div');
                 let generalInfoHTML = '<h2>General Properties</h2><div class="results-card">';
-                if (tcr && tcr.value !== "unknown" && !isNaN(tcr.value)) {
-                    generalInfoHTML += `<p>Calculated TCR: <strong>${tcr.value.toExponential(2)} ± ${tcr.esd.toExponential(1)} 1/K</strong></p>`;
+                if (coeffs && coeffs.success) {
+                    generalInfoHTML += `<h3>Calculated R(T) Fit</h3>`;
+                    generalInfoHTML += `<p>C₀: <strong>${coeffs.c0.toExponential(3)} Ω</strong></p>`;
+                    generalInfoHTML += `<p>C₁: <strong>${coeffs.c1.toExponential(3)} Ω/K</strong></p>`;
+                    generalInfoHTML += `<p>C₂: <strong>${coeffs.c2.toExponential(3)} Ω/K²</strong></p>`;
                 }
+
                 if (!isNaN(f_min) && !isNaN(f_max)) {
                     if (f_min < 1e-6 || f_max > 1e11 || f_min >= f_max) {
                          generalInfoHTML += `<p title="Calculation resulted in non-physical values.">Recommended Fit Range: <strong>N/A</strong></p>`;
@@ -938,6 +1017,7 @@
                     <h3>Dataset: ${formatTimestamp(result.timestamp)}</h3>
                     <p>Avg Temperature: <strong>${result.avg_temp > 0 ? result.avg_temp.toFixed(2) + ' K' : 'N/A'}</strong></p>
                     <p>Resistance (R₀): <strong>${result.R0.toFixed(2)} ± ${result.esd_R0.toExponential(1)} Ω</strong></p>
+                    <p>Local TCR (α): <strong>${!isNaN(result.local_tcr) ? result.local_tcr.toExponential(2) : '...'} 1/K</strong></p>
                     <p>Max Power: ${maxPowerText}</p>
                     <p>Thermal Cond. (k): <strong>${!isNaN(result.k) ? result.k.toExponential(3) + ' ± ' + result.esd_k.toExponential(1) : '...'} W/mK</strong></p>
                     <p>Thermal Diff. (α): ${alpha_text}</p>
@@ -1094,7 +1174,7 @@
         }
         
         function sanitizeForPDF(text) {
-            return text.replace(/Ω/g, 'Ohm').replace(/α/g, 'alpha').replace(/₀/g, '0').replace(/ₛ/g, 's').replace(/±/g, '+/-');
+            return text.replace(/Ω/g, 'Ohm').replace(/α/g, 'alpha').replace(/₀/g, '0').replace(/₁/g, '1').replace(/₂/g, '2').replace(/ₛ/g, 's').replace(/±/g, '+/-');
         }
 
         async function exportPDFReport() {
@@ -1188,18 +1268,22 @@
                     const L_ppm = parseFloat(document.getElementById('esd-wire-length-ppm').value);
                     const two_b_val_mm = parseFloat(document.getElementById('wire-width').value);
                     const two_b_ppm = parseFloat(document.getElementById('esd-wire-width-ppm').value);
-                    const tcr_val = parseFloat(document.getElementById('tcr').value);
-                    const tcr_ppm = parseFloat(document.getElementById('esd-tcr-ppm').value);
+                    const C0 = parseFloat(document.getElementById('tcr-c0').value);
+                    const C1 = parseFloat(document.getElementById('tcr-c1').value);
+                    const C2 = parseFloat(document.getElementById('tcr-c2').value);
 
                     pdf.text(sanitizeForPDF(`Voltage Probe Distance (L): ${L_val_mm.toFixed(3)} ± ${(L_val_mm * L_ppm / 1e6).toExponential(1)} mm`), col1_x, yPos_col1); yPos_col1 += 6;
                     pdf.text(sanitizeForPDF(`Wire Width (2b): ${two_b_val_mm.toFixed(3)} ± ${(two_b_val_mm * two_b_ppm / 1e6).toExponential(1)} mm`), col1_x, yPos_col1); yPos_col1 += 6;
-                    pdf.text(sanitizeForPDF(`TCR (α): ${tcr_val.toExponential(3)} ± ${(tcr_val * tcr_ppm / 1e6).toExponential(1)} 1/K`), col1_x, yPos_col1); yPos_col1 += 6;
                     pdf.text(sanitizeForPDF(`Substrate Thickness (dₛ): ${document.getElementById('thickness-substrate').value} mm`), col1_x, yPos_col1); yPos_col1 += 6;
-                    pdf.text(`Fitting Range: ${result.minFitFreq.toFixed(2)} Hz to ${result.maxFitFreq.toFixed(2)} Hz`, col1_x, yPos_col1); yPos_col1 += 6;
                     pdf.text(`Fit Method: ${document.getElementById('fit-method').value}`, col1_x, yPos_col1); yPos_col1 += 6;
+                    pdf.text(`Fitting Range: ${result.minFitFreq.toFixed(2)} Hz to ${result.maxFitFreq.toFixed(2)} Hz`, col1_x, yPos_col1); yPos_col1 += 6;
+                    yPos_col1 += 4;
+                    pdf.text(sanitizeForPDF(`R(T) Coeffs: C₀=${C0.toExponential(2)}, C₁=${C1.toExponential(2)}, C₂=${C2.toExponential(2)}`), col1_x, yPos_col1); yPos_col1 += 6;
+
 
                     pdf.text(sanitizeForPDF(`Avg Temperature: ${result.avg_temp > 0 ? result.avg_temp.toFixed(2) + ' K' : 'N/A'}`), col2_x, yPos_col2); yPos_col2 += 6;
                     pdf.text(sanitizeForPDF(`Resistance (R₀): ${result.R0.toFixed(2)} ± ${result.esd_R0.toExponential(1)} Ω`), col2_x, yPos_col2); yPos_col2 += 6;
+                    pdf.text(sanitizeForPDF(`Local TCR (α): ${!isNaN(result.local_tcr) ? result.local_tcr.toExponential(2) : 'N/A'} 1/K`), col2_x, yPos_col2); yPos_col2 += 6;
                     const max_power_text_pdf = !isNaN(result.maxPowerPerLength) ? `${result.maxPowerPerLength.toFixed(2)} W/m` : 'N/A';
                     pdf.text(sanitizeForPDF(`Max Power: ${max_power_text_pdf}`), col2_x, yPos_col2); yPos_col2 += 6;
                     const k_text_pdf = !isNaN(result.k) ? `${result.k.toExponential(3)} ± ${result.esd_k.toExponential(1)} W/mK` : 'N/A';
@@ -1285,7 +1369,7 @@
                         }
                     }
                 }
-                pdf.save(`3omega_report_v2.2_final_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+                pdf.save(`3omega_report_v2.3_final_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
             } catch (error) {
                 console.error("Error generating PDF:", error);
                 showError("An error occurred while generating the PDF. See browser console.");
@@ -1369,13 +1453,24 @@
             
             svg.selectAll(".dot-r").data(plotData).enter().append("circle").attr("cx", d => xScale(d.x)).attr("cy", d => yScale(d.y)).attr("r", 4).style("fill", "#059669");
 
-            const fit = robustLinearRegression(plotData, 'x', 'y', 'sigma');
-            if (fit.slope !== 0) {
-                svg.append("line").style("stroke", "#d97706").style("stroke-width", 2).style("stroke-dasharray", "5,5")
-                    .attr("x1", xScale.range()[0]).attr("y1", yScale(fit.intercept + fit.slope * xScale.domain()[0]))
-                    .attr("x2", xScale.range()[1]).attr("y2", yScale(fit.intercept + fit.slope * xScale.domain()[1]));
-                const tcr = parsedFileContent.calculated_tcr;
-                const fitText = `Fit: R(T) = ${fit.slope.toExponential(2)} * T + ${fit.intercept.toFixed(2)} | TCR: ${tcr.value.toExponential(2)} ± ${tcr.esd.toExponential(1)} 1/K`;
+            const fit_coeffs = parsedFileContent.rt_fit_coefficients;
+            if (fit_coeffs && fit_coeffs.success) {
+                const { c0, c1, c2 } = fit_coeffs;
+                const curve_points = d3.range(xScale.domain()[0], xScale.domain()[1], (xScale.domain()[1] - xScale.domain()[0]) / 100);
+                
+                const line = d3.line()
+                    .x(d => xScale(d))
+                    .y(d => yScale(c2 * d * d + c1 * d + c0));
+
+                svg.append("path")
+                    .datum(curve_points)
+                    .attr("fill", "none")
+                    .attr("stroke", "#d97706")
+                    .attr("stroke-width", 2)
+                    .attr("stroke-dasharray", "5,5")
+                    .attr("d", line);
+
+                const fitText = `Fit: R(T) = ${c2.toExponential(2)}T² + ${c1.toExponential(2)}T + ${c0.toExponential(2)}`;
                 svg.append("text").attr("x", width).attr("y", 0).attr("text-anchor", "end").style("font-size", "12px").text(fitText);
             }
         }
