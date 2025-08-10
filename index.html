@@ -221,6 +221,33 @@
         .control-group-checkbox label {
             margin-bottom: 0; /* Override default block margin */
         }
+        
+        /* New styles for Global toggle */
+        .label-with-global {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .label-with-global > label { /* Target direct child label */
+            margin-bottom: 0; 
+        }
+        .global-toggle {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .global-toggle label {
+            font-weight: normal;
+            font-size: 0.85em;
+            color: #555;
+            cursor: pointer;
+        }
+        .global-toggle input[type="checkbox"] {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+        }
     </style>
 </head>
 <body>
@@ -292,14 +319,26 @@
                         </select>
                     </div>
                     <div class="control-group">
-                        <label for="fit-fmin">Min Frequency (Hz)</label>
+                        <div class="label-with-global">
+                            <label for="fit-fmin">Min Frequency (Hz)</label>
+                            <div class="global-toggle">
+                                <input type="checkbox" id="fit-fmin-global">
+                                <label for="fit-fmin-global">Global</label>
+                            </div>
+                        </div>
                         <div class="control-row">
                             <input type="range" id="fit-fmin-slider">
                             <input type="number" id="fit-fmin">
                         </div>
                     </div>
                     <div class="control-group">
-                        <label for="fit-fmax">Max Frequency (Hz)</label>
+                        <div class="label-with-global">
+                            <label for="fit-fmax">Max Frequency (Hz)</label>
+                             <div class="global-toggle">
+                                <input type="checkbox" id="fit-fmax-global">
+                                <label for="fit-fmax-global">Global</label>
+                            </div>
+                        </div>
                         <div class="control-row">
                             <input type="range" id="fit-fmax-slider">
                             <input type="number" id="fit-fmax">
@@ -316,7 +355,7 @@
             </div>
         </div>
         <footer>
-            <span>3-Omega_Analyzer_2DFit v2.6, 9 August 2025</span>
+            <span>3-Omega_Analyzer_2DFit v2.7, 10 August 2025</span>
             <span>NitaD, Univ Paris-Saclay</span>
         </footer>
     </div>
@@ -448,8 +487,10 @@
 
             const fminSlider = document.getElementById('fit-fmin-slider');
             const fminValue = document.getElementById('fit-fmin');
+            const fminGlobal = document.getElementById('fit-fmin-global');
             const fmaxSlider = document.getElementById('fit-fmax-slider');
             const fmaxValue = document.getElementById('fit-fmax');
+            const fmaxGlobal = document.getElementById('fit-fmax-global');
 
             fminValue.min = minFreq.toFixed(2); fminValue.max = maxFreq.toFixed(2);
             fmaxValue.min = minFreq.toFixed(2); fmaxValue.max = maxFreq.toFixed(2);
@@ -461,39 +502,62 @@
             fminSlider.value = logMin; fminValue.value = minFreq.toFixed(2);
             fmaxSlider.value = logMax; fmaxValue.value = maxFreq.toFixed(2);
 
-            const updateLocalAnalysis = () => { if (parsedFileContent.datasets.length > 0) analyzeAndDisplay(false); };
-            fminSlider.oninput = () => {
+            const updateAnalysisAfterFreqChange = () => {
+                if (parsedFileContent.datasets.length === 0) return;
                 isShowingRTPlot = false;
+                const minFreqVal = parseFloat(fminValue.value);
+                const maxFreqVal = parseFloat(fmaxValue.value);
+
+                let analyzeAll = false;
+                if (fminGlobal.checked) {
+                    analysisResults.forEach(res => res.minFitFreq = minFreqVal);
+                    analyzeAll = true;
+                }
+                if (fmaxGlobal.checked) {
+                    analysisResults.forEach(res => res.maxFitFreq = maxFreqVal);
+                    analyzeAll = true;
+                }
+
+                analyzeAndDisplay(analyzeAll);
+            };
+
+            fminSlider.oninput = () => {
                 const logVal = parseFloat(fminSlider.value);
                 fminValue.value = Math.exp(logVal).toFixed(2);
-                if (parseFloat(fmaxSlider.value) < logVal) { fmaxSlider.value = logVal; fmaxValue.value = Math.exp(logVal).toFixed(2); }
-                updateLocalAnalysis();
+                if (parseFloat(fmaxSlider.value) < logVal) {
+                    fmaxSlider.value = logVal;
+                    fmaxValue.value = Math.exp(logVal).toFixed(2);
+                }
+                updateAnalysisAfterFreqChange();
             };
             fmaxSlider.oninput = () => {
-                isShowingRTPlot = false;
                 const logVal = parseFloat(fmaxSlider.value);
                 fmaxValue.value = Math.exp(logVal).toFixed(2);
-                if (logVal < parseFloat(fminSlider.value)) { fminSlider.value = logVal; fminValue.value = Math.exp(logVal).toFixed(2); }
-                updateLocalAnalysis();
+                if (logVal < parseFloat(fminSlider.value)) {
+                    fminSlider.value = logVal;
+                    fminValue.value = Math.exp(logVal).toFixed(2);
+                }
+                updateAnalysisAfterFreqChange();
             };
             fminValue.onchange = () => {
-                isShowingRTPlot = false;
                 let val = parseFloat(fminValue.value);
-                if (val <= 0) val = 0.01;
+                if (isNaN(val) || val <= 0) val = 0.01;
                 if (val > maxFreq) val = maxFreq;
                 fminValue.value = val.toFixed(2);
                 fminSlider.value = Math.log(val);
-                updateLocalAnalysis();
+                updateAnalysisAfterFreqChange();
             };
             fmaxValue.onchange = () => {
-                isShowingRTPlot = false;
                 let val = parseFloat(fmaxValue.value);
-                if (val < minFreq) val = minFreq;
+                if (isNaN(val) || val < minFreq) val = minFreq;
                 if (val > maxFreq) val = maxFreq;
                 fmaxValue.value = val.toFixed(2);
                 fmaxSlider.value = Math.log(val);
-                updateLocalAnalysis();
+                updateAnalysisAfterFreqChange();
             };
+            
+            fminGlobal.onchange = updateAnalysisAfterFreqChange;
+            fmaxGlobal.onchange = updateAnalysisAfterFreqChange;
         }
 
         function parseData(fileContent) {
@@ -1403,7 +1467,7 @@ async function exportPDFReport() {
                         }
                     }
                 }
-                pdf.save(`3omega_report_v2.6_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+                pdf.save(`3omega_report_v2.7_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
             } catch (error) {
                 console.error("Error generating PDF:", error);
                 showError("An error occurred while generating the PDF. See browser console.");
