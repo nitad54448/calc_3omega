@@ -1184,7 +1184,7 @@
             return text.replace(/Ω/g, 'Ohm').replace(/α/g, 'alpha').replace(/₀/g, '0').replace(/₁/g, '1').replace(/₂/g, '2').replace(/ₛ/g, 's').replace(/±/g, '+/-');
         }
 
-        async function exportPDFReport() {
+async function exportPDFReport() {
             const btn = document.getElementById('save-report-btn');
             btn.textContent = 'Generating...';
             btn.disabled = true;
@@ -1200,9 +1200,35 @@
                 let yPos = margin;
 
                 pdf.setFontSize(20).text("3-Omega Analysis Report", pageWidth / 2, yPos, { align: 'center' });
-                yPos += 8;
-                pdf.setFontSize(12).text(`Report generated: ${new Date().toLocaleString()}`, pageWidth / 2, yPos, { align: 'center' });
+                yPos += 10;
+
+                // --- MODIFICATION START ---
+                // The following block is updated to correctly find the nested sample name.
+                let sampleName = 'N/A';
+                const header = parsedFileContent.jsonHeader;
+                if (header) {
+                    sampleName = header.exp?.Sample || // Checks for "exp": { "Sample": "..." }
+                                 header.exp?.sample || // Checks for "exp": { "sample": "..." }
+                                 header.Sample ||      // Checks for "Sample": "..."
+                                 header['sample name'] || // Checks for "sample name": "..."
+                                 'N/A';
+                }
+
+                const startTime = analysisResults.length > 0 ? analysisResults[0].timestamp : null;
+                const endTime = analysisResults.length > 0 ? analysisResults[analysisResults.length - 1].timestamp : null;
+                const measurementDateString = (startTime && endTime) 
+                    ? `${formatTimestamp(startTime)} to ${formatTimestamp(endTime)}`
+                    : 'Not available';
+
+                pdf.setFontSize(12).text(`Sample: ${sampleName}`, pageWidth / 2, yPos, { align: 'center' });
+                yPos += 7;
+                pdf.setFontSize(12).text(`Data measured: ${measurementDateString}`, pageWidth / 2, yPos, { align: 'center' });
+                yPos += 7;
+                // --- MODIFICATION END ---
+
+                pdf.setFontSize(10).text(`Report generated: ${new Date().toLocaleString()}`, pageWidth / 2, yPos, { align: 'center' });
                 yPos += 12;
+
 
                 pdf.setFontSize(10).text("Data File Header Information", margin, yPos);
                 yPos += 6;
