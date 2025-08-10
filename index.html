@@ -344,6 +344,7 @@
                             <input type="number" id="fit-fmax">
                         </div>
                     </div>
+                    <div id="recommended-fit-range-container"></div>
                 </div>
 
                 <div id="results-container"></div>
@@ -355,7 +356,7 @@
             </div>
         </div>
         <footer>
-            <span>3-Omega_Analyzer_2DFit v2.7, 10 August 2025</span>
+            <span>3-Omega_Analyzer_2DFit v2.8, 10 August 2025</span>
             <span>NitaD, Univ Paris-Saclay</span>
         </footer>
     </div>
@@ -967,29 +968,34 @@
         }
 
         function renderResultsUI() {
+            const recommendedRangeContainer = document.getElementById('recommended-fit-range-container');
             const resultsContainer = document.getElementById('results-container');
+            
+            // Clear previous results
+            recommendedRangeContainer.innerHTML = '';
             resultsContainer.innerHTML = '';
+
             if (analysisResults.length === 0) return;
             
+            // --- Populate Recommended Fit Range ---
             const f_min = parsedFileContent.global_f_min_linearity;
             const f_max = parsedFileContent.global_f_max_linearity;
 
             if (!isNaN(f_min) && !isNaN(f_max)) {
-                const generalInfoContainer = document.createElement('div');
-                let generalInfoHTML = '<h2>General Properties</h2><div class="results-card">';
+                let recommendedRangeHTML = '<div class="results-card">';
                  if (f_min < 1e-6 || f_max > 1e11 || f_min >= f_max) {
-                         generalInfoHTML += `<p title="Calculation resulted in non-physical values.">Recommended Fit Range: <strong>N/A</strong></p>`;
+                         recommendedRangeHTML += `<p title="Calculation resulted in non-physical values.">Recommended Fit Range: <strong>N/A</strong></p>`;
                  } else {
                     const f_min_display = Math.max(0.001, f_min);
                     const f_max_display = Math.min(1e6, f_max);
                     const formatFreq = (f) => f >= 1e3 ? `${(f/1e3).toFixed(2)} kHz` : `${f.toFixed(2)} Hz`;
-                    generalInfoHTML += `<p title="f_min ensures substrate is thermally thick. f_max ensures 2D heat flow.">Recommended Fit Range: <strong>${formatFreq(f_min_display)} — ${formatFreq(f_max_display)}</strong></p>`;
+                    recommendedRangeHTML += `<p title="f_min ensures substrate is thermally thick. f_max ensures 2D heat flow.">Recommended Fit Range: <strong>${formatFreq(f_min_display)} — ${formatFreq(f_max_display)}</strong></p>`;
                  }
-                generalInfoHTML += '</div>';
-                generalInfoContainer.innerHTML = generalInfoHTML;
-                resultsContainer.appendChild(generalInfoContainer);
+                recommendedRangeHTML += '</div>';
+                recommendedRangeContainer.innerHTML = recommendedRangeHTML;
             }
 
+            // --- Populate Per-Dataset Analysis ---
             const analysisTitle = document.createElement('h2');
             analysisTitle.textContent = 'Per-Dataset Analysis';
             resultsContainer.appendChild(analysisTitle);
@@ -1467,7 +1473,7 @@ async function exportPDFReport() {
                         }
                     }
                 }
-                pdf.save(`3omega_report_v2.7_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+                pdf.save(`3omega_report_v2.8_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
             } catch (error) {
                 console.error("Error generating PDF:", error);
                 showError("An error occurred while generating the PDF. See browser console.");
