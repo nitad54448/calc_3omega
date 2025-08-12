@@ -983,7 +983,7 @@
             document.getElementById('fit-fmax-slider').value = Math.log(maxFitFreq);
         }
 
-        function renderResultsUI() {
+function renderResultsUI() {
             const recommendedRangeContainer = document.getElementById('recommended-fit-range-container');
             const resultsContainer = document.getElementById('results-container');
             
@@ -1025,7 +1025,10 @@
             analysisResults.forEach((result, index) => {
                 const option = document.createElement('option');
                 option.value = index;
-                option.textContent = formatTimestamp(result.timestamp);
+                // --- MODIFICATION IS HERE ---
+                const tempPrefix = result.avg_temp > 0 ? `${result.avg_temp.toFixed(2)} K: ` : '';
+                option.textContent = `${tempPrefix}${formatTimestamp(result.timestamp)}`;
+                // --- END MODIFICATION ---
                 if (index === selectedDatasetIndex) option.selected = true;
                 selector.appendChild(option);
             });
