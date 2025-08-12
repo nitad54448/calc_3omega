@@ -478,7 +478,7 @@
             event.target.value = null;
         }
 
-        function setupFittingSliders() {
+    function setupFittingSliders() {
             const allFreqs = parsedFileContent.datasets.flatMap(ds => ds.data.map(d => d.freq));
             const minFreq = Math.max(0.01, Math.min(...allFreqs));
             const maxFreq = Math.max(...allFreqs);
@@ -509,7 +509,10 @@
                 const minFreqVal = parseFloat(fminValue.value);
                 const maxFreqVal = parseFloat(fmaxValue.value);
 
+                // --- MODIFICATION START ---
                 let analyzeAll = false;
+
+                // If a global toggle is checked, that value applies to all datasets.
                 if (fminGlobal.checked) {
                     analysisResults.forEach(res => res.minFitFreq = minFreqVal);
                     analyzeAll = true;
@@ -518,7 +521,20 @@
                     analysisResults.forEach(res => res.maxFitFreq = maxFreqVal);
                     analyzeAll = true;
                 }
-
+                
+                // Crucially, if a toggle is NOT checked, the value *still* needs to be
+                // applied to the currently selected dataset before analysis.
+                const currentResult = analysisResults[selectedDatasetIndex];
+                if (currentResult) {
+                    if (!fminGlobal.checked) {
+                        currentResult.minFitFreq = minFreqVal;
+                    }
+                    if (!fmaxGlobal.checked) {
+                        currentResult.maxFitFreq = maxFreqVal;
+                    }
+                }
+                // --- MODIFICATION END ---
+                
                 analyzeAndDisplay(analyzeAll);
             };
 
