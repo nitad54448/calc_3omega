@@ -1,5 +1,7 @@
 # 3-Omega 3D Surface Fit Analyzer: Explanation
 
+### Note: a similar program but using linear fit is available in this repository, see it's help file for details.
+
 ## 1. Introduction
 
 This document provides a detailed explanation for the "3-Omega 3D Surface Fit Analyzer" web application. This tool is designed to analyze experimental data obtained from the 3-omega ($3\omega$) method to determine the thermal conductivity and thermal diffusivity of materials, typically thin films or substrates.
@@ -58,8 +60,9 @@ The user must provide several key experimental and analysis parameters in the UI
 * **Phase Correction**: A checkbox to apply a 180° phase correction, which inverts the sign of the in-phase ($V_{3x}$) data.
 * **Voltage Probe Distance (L)** and its uncertainty (in ppm).
 * **Wire Width (2b)** and its uncertainty (in ppm).
-* **Substrate Thickness (dₛ)**.
-* **R(T) Coefficients (C₀, C₁, C₂) **: Defines the resistance-temperature relationship as $R(T) = C_2T^2 + C_1T + C_0$. These are used to calculate the resistance $R(T)$ and the local TCR $\alpha_{TCR}$ at the average temperature of each dataset.
+* **Substrate Thickness (dₛ)**
+* **R(T) Coefficients (C₀, C₁, C₂)**: Defines the resistance-temperature relationship as
+$R(T) = C_2T^2 + C_1T + C_0$. These are used to calculate the resistance $R(T)$ and the local TCR $\alpha_{TCR}$ at the average temperature of each dataset.
 
 ### 3.3. The 3D Surface Fitting Process
 
@@ -76,20 +79,17 @@ For each dataset, the program performs the following steps:
 Once the fit provides robust values for $q_1$ and $q_2$ (and their uncertainties, $esd_{q1}$ and $esd_{q2}$), the thermal properties are calculated.
 
 1.  **Local TCR Calculation**: The local TCR at the dataset's average temperature T is found using the polynomial coefficients:
-    $$
-    \alpha_{TCR} = \frac{1}{R(T)}\frac{dR}{dT} = \frac{2C_2T + C_1}{C_2T^2 + C_1T + C_0}
-    $$
 
-2.  **Thermal Conductivity (k)**: The thermal conductivity is calculated by rearranging the equation for $q_1$:
-    $$
-    k = \frac{R(T)^2 \alpha_{TCR}}{4 \pi L q_1}
-    $$
+    $$\alpha_{TCR} = \frac{1}{R(T)}\frac{dR}{dT} = \frac{2C_2T + C_1}{C_2T^2 + C_1T + C_0}$$
+
+3.  **Thermal Conductivity (k)**: The thermal conductivity is calculated by rearranging the equation for $q_1$:
+
+    $$k = \frac{R(T)^2 \alpha_{TCR}}{4 \pi L q_1}$$
     The uncertainty, $esd_k$, is propagated from the uncertainties in $R(T)$, $L$, and $q_1$.
 
-3.  **Thermal Diffusivity ($\alpha_{diff}$)**: The thermal diffusivity is calculated by rearranging the equation involving $q_2/q_1$:
-    $$
-    \alpha_{diff} = \frac{b^2 e^\gamma}{8} \exp\left(\frac{q_2}{q_1}\right)
-    $$
+5.  **Thermal Diffusivity ($\alpha_{diff}$)**: The thermal diffusivity is calculated by rearranging the equation involving $q_2/q_1$:
+
+    $$\alpha_{diff} = \frac{b^2 e^\gamma}{8} \exp\left(\frac{q_2}{q_1}\right)$$
     The uncertainty, $esd_{\alpha}$, is propagated from the uncertainties in $b$, $q_1$, and $q_2$.
 
 ## 4. Visualization and Reporting
