@@ -1,5 +1,7 @@
 # 3-Omega 3D Surface Fit Analyzer: Explanation
 
+### Note: a similar program but using linear fit is available in this repository, see it's help file for details.
+
 ## 1. Introduction
 
 This document provides a detailed explanation for the "3-Omega 3D Surface Fit Analyzer" web application. This tool is designed to analyze experimental data obtained from the 3-omega ($3\omega$) method to determine the thermal conductivity and thermal diffusivity of materials, typically thin films or substrates.
