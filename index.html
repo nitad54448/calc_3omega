@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3-Omega 2D Fit Analyzer</title>
+    <title>3-Omega 3D Surface Fit Analyzer</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
@@ -26,7 +27,7 @@
             min-height: 0;
         }
         #controls-panel {
-            width: 350px;
+            width: 380px;
             min-width: 200px;
             max-width: 600px;
             flex-shrink: 0;
@@ -107,7 +108,8 @@
 
         #visualization-area { flex-grow: 1; position: relative; background-color: #ffffff; min-width: 0; display: flex; flex-direction: column; padding: 1.5rem; }
         #plot-container { flex-grow: 1; width: 100%; height: 100%; }
-        #plot-container svg { width: 100%; height: 100%; }
+        #plot-container .svg-container { width: 100%; height: 100%; } /* D3 plot container */
+
 
         .results-card {
             background-color: #e9f5ff;
@@ -122,8 +124,24 @@
 
         #dataset-controls {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             align-items: center;
+        }
+        #dataset-navigation {
+            display: flex;
+            flex-direction: column;
+        }
+        .nav-btn {
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+            padding: 2px 6px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.8em;
+            line-height: 1;
+        }
+        .nav-btn:hover {
+            background-color: #e0e0e0;
         }
         #dataset-selector {
             flex-grow: 1;
@@ -174,24 +192,11 @@
         /* Plot style */
         .axis path, .axis .tick line { stroke: #888; }
         .axis .tick text { fill: #555; font-size: 14px; }
-        .line { fill: none; }
-        .dot { stroke-width: 1.5px; }
         .axis-label { font-size: 16px; fill: #333; font-weight: 500; }
-        .legend { font-size: 14px; }
-        .fit-line-in-phase { stroke: #1E40AF; stroke-dasharray: 5, 5; stroke-width: 2px; }
-        .fit-line-out-of-phase { stroke: #B45309; stroke-dasharray: 5, 5; stroke-width: 2px; }
-        .fit-marker { stroke: red; stroke-width: 1.5px; stroke-dasharray: 4, 4; }
-        .axis-label.y-label-left { fill: #1E40AF; }
-        .axis-label.y-label-right { fill: #B45309; }
-        .axis.y-axis-left .tick text { fill: #1E40AF; }
-        .axis.y-axis-left path.domain { stroke: #1E40AF; }
-        .axis.y-axis-right .tick text { fill: #B45309; }
-        .axis.y-axis-right path.domain { stroke: #B45309; }
-        .rt-fit-line { stroke: #d97706; stroke-width: 2.5px; stroke-dasharray: 6, 6; }
+        .rt-fit-line { stroke: #d97706; stroke-width: 2.5px; stroke-dasharray: 6, 6; fill: none; }
         .rt-data-point { fill: #059669; }
         .rt-error-bar { stroke: #555; stroke-width: 1px; }
 
-        /* container caché pour les graphs PDF extra */
         #pdf-plot-temp-container {
             position: absolute;
             left: -9999px;
@@ -219,17 +224,16 @@
             margin-bottom: 18px;
         }
         .control-group-checkbox label {
-            margin-bottom: 0; /* Override default block margin */
+            margin-bottom: 0;
         }
         
-        /* New styles for Global toggle */
         .label-with-global {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 8px;
         }
-        .label-with-global > label { /* Target direct child label */
+        .label-with-global > label {
             margin-bottom: 0; 
         }
         .global-toggle {
@@ -254,7 +258,7 @@
     <div id="app-container">
         <div id="main-content">
             <div id="controls-panel">
-                <h1>3-Omega 2D Fit Analyzer</h1>
+                <h1>3-Omega 3D Surface Fit Analyzer</h1>
 
                <div class="control-group">
                     <label>Upload Data File</label>
@@ -310,7 +314,7 @@
                 </div>
 
                 <div id="fitting-controls" class="hidden">
-                    <h2>Fitting Controls</h2>
+                    <h2>Fitting Controls (Linear Fit)</h2>
                     <div class="control-group">
                         <label for="fit-method">Fit Method</label>
                         <select id="fit-method">
@@ -356,7 +360,7 @@
             </div>
         </div>
         <footer>
-            <span>3-Omega_Analyzer_2DFit v2.8, 10 August 2025</span>
+            <span>3Omega_3DFit v3.9, 13 August 2025</span>
             <span>NitaD, Univ Paris-Saclay</span>
         </footer>
     </div>
@@ -368,13 +372,11 @@
         const { jsPDF } = window.jspdf;
         let parsedFileContent = { datasets: [], jsonHeader: null };
         let analysisResults = [];
-        let currentPlotData = {};
         let selectedDatasetIndex = 0;
-        let isShowingRTPlot = false; // State to control which plot is visible
+        let isShowingRTPlot = false;
 
         document.getElementById('file-upload').addEventListener('change', handleFileSelect, false);
         
-        // --- Event Listeners ---
         const globalParamIds = ['wire-length', 'esd-wire-length-ppm', 'wire-width', 'esd-wire-width-ppm', 'thickness-substrate', 'phase-shift-180'];
         globalParamIds.forEach(id => {
             document.getElementById(id)?.addEventListener('change', () => {
@@ -386,9 +388,9 @@
         tcrCoeffIds.forEach(id => {
             document.getElementById(id)?.addEventListener('change', () => {
                 if (parsedFileContent.datasets.length > 0) {
-                    analyzeAndDisplay(true); // First, recalculate all derived values
-                    isShowingRTPlot = true;      // Set state to show the R(T) plot
-                    updateVisualization();     // Update the plot view
+                    analyzeAndDisplay(true);
+                    isShowingRTPlot = true;
+                    updateVisualization();
                 }
             });
         });
@@ -427,52 +429,54 @@
                 fileNameDisplay.textContent = 'No file selected';
                 return;
             }
-
             fileNameDisplay.textContent = file.name;
+            document.body.style.cursor = 'wait';
 
             const reader = new FileReader();
             reader.onload = function(e) {
-                const contents = e.target.result;
-                parsedFileContent = parseData(contents);
-                if (parsedFileContent.datasets.length > 0) {
-                    
-                    const tcr_data = parsedFileContent.datasets
-                        .map(ds => ({ x: ds.avg_temp, y: ds.R0, sigma: ds.esd_R0 }))
-                        .filter(d => !isNaN(d.x) && !isNaN(d.y) && d.x > 0);
+                setTimeout(() => {
+                    const contents = e.target.result;
+                    parsedFileContent = parseData(contents);
+                    if (parsedFileContent.datasets.length > 0) {
+                        
+                        const tcr_data = parsedFileContent.datasets
+                            .map(ds => ({ x: ds.avg_temp, y: ds.R0, sigma: ds.esd_R0 }))
+                            .filter(d => !isNaN(d.x) && !isNaN(d.y) && d.x > 0);
 
-                    const uniqueTemps = new Set(tcr_data.map(d => d.x));
-                    if (tcr_data.length >= 2 && uniqueTemps.size >= 2) {
-                        const fit_coeffs = weightedPolynomialRegression2ndOrder(tcr_data);
-                        if (fit_coeffs.success) {
-                            parsedFileContent.rt_fit_coefficients = fit_coeffs;
-                            document.getElementById('tcr-c0').value = fit_coeffs.c0.toExponential(4);
-                            document.getElementById('tcr-c1').value = fit_coeffs.c1.toExponential(4);
-                            document.getElementById('tcr-c2').value = fit_coeffs.c2.toExponential(4);
+                        const uniqueTemps = new Set(tcr_data.map(d => d.x));
+                        if (tcr_data.length >= 2 && uniqueTemps.size >= 2) {
+                            const fit_coeffs = weightedPolynomialRegression2ndOrder(tcr_data);
+                            if (fit_coeffs.success) {
+                                parsedFileContent.rt_fit_coefficients = fit_coeffs;
+                                document.getElementById('tcr-c0').value = fit_coeffs.c0.toExponential(4);
+                                document.getElementById('tcr-c1').value = fit_coeffs.c1.toExponential(4);
+                                document.getElementById('tcr-c2').value = fit_coeffs.c2.toExponential(4);
+                            }
                         }
-                    }
-                    
-                    const allFreqs = parsedFileContent.datasets.flatMap(ds => ds.data.map(d => d.freq));
-                    const globalMinFreq = Math.max(0.01, Math.min(...allFreqs));
-                    const globalMaxFreq = Math.max(...allFreqs);
-                    
-                    analysisResults = parsedFileContent.datasets.map(dataset => {
-                        const processedData = processDataWithInternalFit(dataset.data);
-                        return { ...dataset, processedData, minFitFreq: globalMinFreq, maxFitFreq: globalMaxFreq };
-                    });
+                        
+                        const allFreqs = parsedFileContent.datasets.flatMap(ds => ds.data.map(d => d.freq));
+                        const globalMinFreq = Math.max(0.01, Math.min(...allFreqs));
+                        const globalMaxFreq = Math.max(...allFreqs);
+                        
+                        analysisResults = parsedFileContent.datasets.map(dataset => {
+                            return { ...dataset, minFitFreq: globalMinFreq, maxFitFreq: globalMaxFreq };
+                        });
 
-                    selectedDatasetIndex = 0;
-                    isShowingRTPlot = false; // Default to dataset view on new file
-                    document.getElementById('fitting-controls').classList.remove('hidden');
-                    document.getElementById('save-report-btn').classList.remove('hidden');
-                    setupFittingSliders();
-                    analyzeAndDisplay(true);
-                } else {
-                    showError("Could not parse any valid datasets from the file.");
-                    document.getElementById('fitting-controls').classList.add('hidden');
-                    document.getElementById('save-report-btn').classList.add('hidden');
-                    document.getElementById('results-container').innerHTML = '';
-                    clearPlot();
-                }
+                        selectedDatasetIndex = 0;
+                        isShowingRTPlot = false;
+                        document.getElementById('fitting-controls').classList.remove('hidden');
+                        document.getElementById('save-report-btn').classList.remove('hidden');
+                        setupFittingSliders();
+                        analyzeAndDisplay(true); // This will reset the cursor
+                    } else {
+                        showError("Could not parse any valid datasets from the file.");
+                        document.getElementById('fitting-controls').classList.add('hidden');
+                        document.getElementById('save-report-btn').classList.add('hidden');
+                        document.getElementById('results-container').innerHTML = '';
+                        clearPlot();
+                        document.body.style.cursor = 'default';
+                    }
+                }, 10);
             };
             reader.readAsText(file);
             event.target.value = null;
@@ -508,11 +512,8 @@
                 isShowingRTPlot = false;
                 const minFreqVal = parseFloat(fminValue.value);
                 const maxFreqVal = parseFloat(fmaxValue.value);
-
-                // --- MODIFICATION START ---
                 let analyzeAll = false;
 
-                // If a global toggle is checked, that value applies to all datasets.
                 if (fminGlobal.checked) {
                     analysisResults.forEach(res => res.minFitFreq = minFreqVal);
                     analyzeAll = true;
@@ -522,19 +523,11 @@
                     analyzeAll = true;
                 }
                 
-                // Crucially, if a toggle is NOT checked, the value *still* needs to be
-                // applied to the currently selected dataset before analysis.
                 const currentResult = analysisResults[selectedDatasetIndex];
                 if (currentResult) {
-                    if (!fminGlobal.checked) {
-                        currentResult.minFitFreq = minFreqVal;
-                    }
-                    if (!fmaxGlobal.checked) {
-                        currentResult.maxFitFreq = maxFreqVal;
-                    }
+                    if (!fminGlobal.checked) currentResult.minFitFreq = minFreqVal;
+                    if (!fmaxGlobal.checked) currentResult.maxFitFreq = maxFreqVal;
                 }
-                // --- MODIFICATION END ---
-                
                 analyzeAndDisplay(analyzeAll);
             };
 
@@ -638,6 +631,7 @@
                                     freq, v3_in_phase: v3x, v3_out_of_phase: v3y,
                                     esdV3X, esdV3Y, current,
                                     ln_2omega: Math.log(2 * 2 * Math.PI * freq),
+                                    i_cubed: Math.pow(current, 3),
                                     isValid
                                 });
                             }
@@ -653,250 +647,273 @@
             return { datasets, jsonHeader };
         }
         
-        function linearRegressionThroughOrigin(points, xKey, yKey) {
-            if (points.length < 2) return { slope: 0, esd_slope: 0 };
-            let sum_xy = 0, sum_xx = 0;
+        /**
+         * Solves V = q2*X2 - q1*X1 where X1=I^3*ln(2w) and X2=I^3
+         * using weighted multiple linear regression. This is non-iterative and robust.
+         * It uses column scaling to improve numerical stability.
+         */
+        function performScaledMLR(dataPoints, isRobust = false) {
+            
+            let points = dataPoints.map(p => ({
+                y: p.v3,
+                x1_raw: -p.i_cubed * p.ln_2omega,
+                x2_raw: p.i_cubed,
+                weight: p.weight
+            }));
+
+            // Calculate scaling factors (RMS of each column)
+            const n = points.length;
+            const s1 = Math.sqrt(points.reduce((sum, p) => sum + p.x1_raw * p.x1_raw, 0) / n);
+            const s2 = Math.sqrt(points.reduce((sum, p) => sum + p.x2_raw * p.x2_raw, 0) / n);
+            
+            if (s1 === 0 || s2 === 0) return { success: false, reason: "Data variation is zero." };
+            
+            // Apply scaling
             points.forEach(p => {
-                if(!isNaN(p[xKey]) && !isNaN(p[yKey])) {
-                    sum_xy += p[xKey] * p[yKey];
-                    sum_xx += p[xKey] * p[xKey];
+                p.x1 = p.x1_raw / s1;
+                p.x2 = p.x2_raw / s2;
+                p.robustWeight = p.weight;
+            });
+
+            let q_scaled = [0, 0], esd_q_scaled = [NaN, NaN];
+
+            for (let robust_iter = 0; robust_iter < (isRobust ? 10 : 1); robust_iter++) {
+                let XTWX = [[0, 0], [0, 0]]; // X'WX
+                let XTWY = [0, 0];       // X'WY
+
+                for (const p of points) {
+                    if (p.robustWeight === 0) continue;
+                    const w = p.robustWeight;
+                    XTWX[0][0] += p.x1 * p.x1 * w;
+                    XTWX[0][1] += p.x1 * p.x2 * w;
+                    XTWX[1][1] += p.x2 * p.x2 * w;
+                    XTWY[0] += p.x1 * p.y * w;
+                    XTWY[1] += p.x2 * p.y * w;
                 }
-            });
-            if (sum_xx === 0) return { slope: 0, esd_slope: 0 };
-            const slope = sum_xy / sum_xx;
-            let sum_sq_residuals = 0;
-            points.forEach(p => {
-                 if(!isNaN(p[xKey]) && !isNaN(p[yKey])) {
-                    sum_sq_residuals += Math.pow(p[yKey] - slope * p[xKey], 2);
-                 }
-            });
-            const dof = points.length - 1;
-            if (dof <= 0) return { slope: slope, esd_slope: 0 };
-            const std_err_regression = Math.sqrt(sum_sq_residuals / dof);
-            const esd_slope = std_err_regression / Math.sqrt(sum_xx);
-            return { slope, esd_slope };
-        }
+                XTWX[1][0] = XTWX[0][1];
 
-        function processDataWithInternalFit(rawData) {
-            const groupedByFreq = d3.group(rawData, d => d.freq);
-            const processedData = [];
-
-            for (const [freq, points] of groupedByFreq.entries()) {
-                const validPoints = points.filter(p => p.isValid);
-
-                if (validPoints.length === 0) {
-                    processedData.push({ freq, ln_2omega: points[0].ln_2omega, isValid: false, v3_in_phase_norm: NaN, esdV3X_norm: NaN, v3_out_of_phase_norm: NaN, esdV3Y_norm: NaN });
-                    continue;
+                const det = XTWX[0][0] * XTWX[1][1] - XTWX[0][1] * XTWX[1][0];
+                if (Math.abs(det) < 1e-25) {
+                    return { success: false, reason: "Singular matrix: data may be collinear." };
                 }
 
-                const pointsWithI3 = validPoints.map(p => ({ ...p, i_cubed: Math.pow(p.current, 3) }));
-                const uniqueCurrents = new Set(validPoints.map(p => p.current));
+                const inv_det = 1 / det;
+                q_scaled[0] = inv_det * (XTWX[1][1] * XTWY[0] - XTWX[0][1] * XTWY[1]);
+                q_scaled[1] = inv_det * (-XTWX[1][0] * XTWY[0] + XTWX[0][0] * XTWY[1]);
                 
-                let fit_in_phase, fit_out_of_phase;
-
-                if (validPoints.length > 1 && uniqueCurrents.size > 1) {
-                    fit_in_phase = linearRegressionThroughOrigin(pointsWithI3, 'i_cubed', 'v3_in_phase');
-                    fit_out_of_phase = linearRegressionThroughOrigin(pointsWithI3, 'i_cubed', 'v3_out_of_phase');
-                } else if (validPoints.length > 1) {
-                    const i_cubed = pointsWithI3[0].i_cubed;
-                    const mean_v3x = d3.mean(pointsWithI3, p => p.v3_in_phase);
-                    const mean_v3y = d3.mean(pointsWithI3, p => p.v3_out_of_phase);
+                if (isRobust) {
+                    const residuals = points.map(p => p.y - (q_scaled[0]*p.x1 + q_scaled[1]*p.x2));
+                    const mad = d3.median(residuals.map(r => Math.abs(r - d3.median(residuals))));
+                    if (mad < 1e-12) break; 
                     
-                    const esd_v3x = Math.max( (d3.deviation(pointsWithI3, p => p.v3_in_phase) || 0) / Math.sqrt(points.length), d3.max(pointsWithI3, p => p.esdV3X) );
-                    const esd_v3y = Math.max( (d3.deviation(pointsWithI3, p => p.v3_out_of_phase) || 0) / Math.sqrt(points.length), d3.max(pointsWithI3, p => p.esdV3Y) );
-                    
-                    if (i_cubed > 0) {
-                        fit_in_phase = { slope: mean_v3x / i_cubed, esd_slope: esd_v3x / i_cubed };
-                        fit_out_of_phase = { slope: mean_v3y / i_cubed, esd_slope: esd_v3y / i_cubed };
-                    } else {
-                        fit_in_phase = { slope: NaN, esd_slope: NaN }; fit_out_of_phase = { slope: NaN, esd_slope: NaN };
-                    }
-                } else {
-                    const p = pointsWithI3[0];
-                    if (p.i_cubed > 0) {
-                       fit_in_phase = { slope: p.v3_in_phase / p.i_cubed, esd_slope: p.esdV3X / p.i_cubed };
-                       fit_out_of_phase = { slope: p.v3_out_of_phase / p.i_cubed, esd_slope: p.esdV3Y / p.i_cubed };
-                    } else {
-                       fit_in_phase = { slope: NaN, esd_slope: NaN }; fit_out_of_phase = { slope: NaN, esd_slope: NaN };
-                    }
+                    const c = 4.685;
+                    points.forEach((p, i) => {
+                        const u = Math.abs(residuals[i] / (c * mad));
+                        p.robustWeight = (u < 1) ? Math.pow(1 - u * u, 2) * p.weight : 0;
+                    });
                 }
-
-                processedData.push({
-                    freq: freq, ln_2omega: points[0].ln_2omega, isValid: true,
-                    v3_in_phase_norm: fit_in_phase.slope, esdV3X_norm: fit_in_phase.esd_slope,
-                    v3_out_of_phase_norm: fit_out_of_phase.slope, esdV3Y_norm: fit_out_of_phase.esd_slope,
-                });
             }
-            return processedData.sort((a, b) => a.freq - b.freq);
+            
+            let XTWX_final = [[0, 0], [0, 0]];
+            for (const p of points) {
+                if (p.robustWeight === 0) continue;
+                const w = p.robustWeight;
+                XTWX_final[0][0] += p.x1 * p.x1 * w;
+                XTWX_final[0][1] += p.x1 * p.x2 * w;
+                XTWX_final[1][1] += p.x2 * p.x2 * w;
+            }
+            XTWX_final[1][0] = XTWX_final[0][1];
+
+            const det_final = XTWX_final[0][0] * XTWX_final[1][1] - XTWX_final[0][1] * XTWX_final[1][0];
+            if (Math.abs(det_final) > 1e-25) {
+                const inv_det = 1/det_final;
+                const var_q1_s = inv_det * XTWX_final[1][1];
+                const var_q2_s = inv_det * XTWX_final[0][0];
+                esd_q_scaled[0] = var_q1_s > 0 ? Math.sqrt(var_q1_s) : NaN;
+                esd_q_scaled[1] = var_q2_s > 0 ? Math.sqrt(var_q2_s) : NaN;
+            }
+
+            // Unscale parameters and errors
+            const q1 = q_scaled[0] / s1;
+            const q2 = q_scaled[1] / s2;
+            const esd_q1 = esd_q_scaled[0] / s1;
+            const esd_q2 = esd_q_scaled[1] / s2;
+
+            const success = !isNaN(q1) && !isNaN(q2) && !isNaN(esd_q1) && !isNaN(esd_q2);
+            return { q1, q2, esd_q1, esd_q2, success, reason: success ? "OK" : "Could not determine parameters." };
         }
+
 
         function analyzeAndDisplay(analyzeAll = false) {
-            if (analysisResults.length === 0) return;
-            
-            const L = parseFloat(document.getElementById('wire-length').value) * 1e-3;
-            const esd_L_ppm = parseFloat(document.getElementById('esd-wire-length-ppm').value);
-            const rel_err_L = esd_L_ppm / 1e6;
-            const two_b = parseFloat(document.getElementById('wire-width').value) * 1e-3;
-            const esd_two_b_ppm = parseFloat(document.getElementById('esd-wire-width-ppm').value);
-            const rel_err_two_b = esd_two_b_ppm / 1e6;
-            const b = two_b / 2;
-            const C_min = 4;
-            const C_max = 5;
-            const d_s = parseFloat(document.getElementById('thickness-substrate').value) * 1e-3;
-            const fitMethod = document.getElementById('fit-method').value;
-            const applyPhaseCorrection = document.getElementById('phase-shift-180').checked;
-            const phaseFactor = applyPhaseCorrection ? -1 : 1;
-
-            const performAnalysisOnDataset = (result, fitRange) => {
-                const C0 = parseFloat(document.getElementById('tcr-c0').value);
-                const C1 = parseFloat(document.getElementById('tcr-c1').value);
-                const C2 = parseFloat(document.getElementById('tcr-c2').value);
-
-                let alpha_tcr = 0;
-                if (result.avg_temp > 0) {
-                    const temp = result.avg_temp;
-                    const R_at_T = C2 * temp * temp + C1 * temp + C0;
-                    const dR_dT = 2 * C2 * temp + C1;
-                    if (R_at_T > 0) {
-                        alpha_tcr = (1 / R_at_T) * dR_dT;
-                    }
+            document.body.style.cursor = 'wait';
+            setTimeout(() => {
+                if (analysisResults.length === 0) {
+                    document.body.style.cursor = 'default';
+                    return;
                 }
-                result.local_tcr = alpha_tcr;
                 
-                const rel_err_tcr_sq = 0; 
-                
-                if (result.data && result.data.length > 0 && result.R0 > 0 && L > 0) {
-                    const maxCurrent = d3.max(result.data, d => d.current);
-                    if (maxCurrent > 0) {
-                        const maxPower = result.R0 * Math.pow(maxCurrent, 2);
-                        result.maxPowerPerLength = maxPower / L;
+                const L = parseFloat(document.getElementById('wire-length').value) * 1e-3;
+                const esd_L_ppm = parseFloat(document.getElementById('esd-wire-length-ppm').value);
+                const rel_err_L_sq = Math.pow(esd_L_ppm / 1e6, 2);
+                const two_b = parseFloat(document.getElementById('wire-width').value) * 1e-3;
+                const esd_two_b_ppm = parseFloat(document.getElementById('esd-wire-width-ppm').value);
+                const rel_err_two_b_sq = Math.pow(esd_two_b_ppm / 1e6, 2);
+                const b = two_b / 2;
+                const C_min = 4;
+                const d_s = parseFloat(document.getElementById('thickness-substrate').value) * 1e-3;
+                const fitMethod = document.getElementById('fit-method').value;
+                const isRobust = fitMethod === 'robust';
+                const applyPhaseCorrection = document.getElementById('phase-shift-180').checked;
+                const phaseFactor = applyPhaseCorrection ? -1 : 1;
+                const eulerGamma = 0.5772156;
+                const MIN_ESD_V = 5E-9; 
+
+                const performAnalysisOnDataset = (result, fitRange) => {
+                    const C0 = parseFloat(document.getElementById('tcr-c0').value);
+                    const C1 = parseFloat(document.getElementById('tcr-c1').value);
+                    const C2 = parseFloat(document.getElementById('tcr-c2').value);
+
+                    let alpha_tcr = 0, R_at_T_val = result.R0;
+                    if (result.avg_temp > 0) {
+                        const temp = result.avg_temp;
+                        const dR_dT = 2 * C2 * temp + C1;
+                        R_at_T_val = C2 * temp * temp + C1 * temp + C0;
+                        if (R_at_T_val > 0) {
+                            alpha_tcr = (1 / R_at_T_val) * dR_dT;
+                        }
+                    }
+                    result.local_tcr = alpha_tcr;
+                    const rel_err_tcr_sq = 0;
+
+                    if (result.data && result.data.length > 0 && result.R0 > 0 && L > 0) {
+                        const maxCurrent = d3.max(result.data, d => d.current);
+                        result.maxPowerPerLength = (maxCurrent > 0) ? (result.R0 * maxCurrent * maxCurrent) / L : NaN;
                     } else {
                         result.maxPowerPerLength = NaN;
                     }
+                    
+                    result.plotData = result.data
+                        .filter(d => d.isValid)
+                        .map(d => ({
+                            freq: d.freq,
+                            i_cubed: d.i_cubed,
+                            ln_2omega: d.ln_2omega,
+                            v3: d.v3_in_phase * phaseFactor,
+                            esdV3: Math.max(d.esdV3X, MIN_ESD_V),
+                        }));
+
+                    const dataForFit = result.plotData
+                        .filter(d => d.freq >= fitRange.min && d.freq <= fitRange.max)
+                        .map(d => ({ ...d, weight: d.esdV3 > 0 ? 1 / (d.esdV3 * d.esdV3) : 0 }));
+                    
+                    const uniqueFreqs = new Set(dataForFit.map(d => d.freq));
+                    const uniqueCurrents = new Set(dataForFit.map(d => d.i_cubed));
+                    if (dataForFit.length < 3 || uniqueFreqs.size < 2 || uniqueCurrents.size < 2) {
+                        result.fitParams = null;
+                        result.failReason = "Insufficient data variation (need at least 2 unique frequencies and currents).";
+                        return;
+                    }
+                    
+                    const fitResult = performScaledMLR(dataForFit, isRobust);
+
+                    let k = NaN, esd_k = NaN, alpha_diff = NaN, esd_alpha_diff = NaN;
+
+                    // Model is V = q2*(I^3) - q1*(I^3*ln(2w))
+                    // So p1 = q1 and p2 = q2/q1
+                    if (fitResult.success && fitResult.q1 > 0) {
+                        const { q1, q2, esd_q1, esd_q2 } = fitResult;
+                        
+                        const p1 = q1;
+                        const p2 = q2 / q1;
+                        
+                        const esd_p1 = esd_q1;
+                        const rel_err_q1_sq = Math.pow(esd_q1/q1, 2);
+                        const rel_err_q2_sq = Math.pow(esd_q2/q2, 2);
+                        const esd_p2 = (q1 !== 0 && q2 !== 0) ? Math.abs(p2) * Math.sqrt(rel_err_q1_sq + rel_err_q2_sq) : NaN;
+
+                        k = (R_at_T_val * R_at_T_val * alpha_tcr) / (4 * Math.PI * L * p1);
+                        const rel_err_R_sq = 4 * Math.pow(result.esd_R0 / R_at_T_val, 2);
+                        const rel_err_p1_sq = Math.pow(esd_p1 / p1, 2);
+                        esd_k = Math.abs(k) * Math.sqrt(rel_err_R_sq + rel_err_tcr_sq + rel_err_L_sq + rel_err_p1_sq);
+
+                        alpha_diff = (b * b * Math.exp(eulerGamma)) / 8 * Math.exp(p2);
+                        esd_alpha_diff = Math.abs(alpha_diff) * Math.sqrt(4 * rel_err_two_b_sq + Math.pow(esd_p2, 2));
+
+                        result.fitParams = { p1, p2 };
+                        result.failReason = null;
+                    } else {
+                         result.fitParams = null;
+                         result.failReason = fitResult.reason || "Fit failed. Check for negative thermal conductivity.";
+                    }
+                    
+                    result.k = k; result.esd_k = esd_k;
+                    result.alpha = alpha_diff * 1e6;
+                    result.esd_alpha = esd_alpha_diff * 1e6;
+                    
+                    const alpha_m2s_for_range = result.alpha / 1e6;
+                    if (alpha_m2s_for_range > 0) {
+                        result.f_min_linearity = (d_s > 0) ? (C_min * C_min * alpha_m2s_for_range) / (4 * Math.PI * d_s * d_s) : NaN;
+                        result.f_max_linearity = (b > 0) ? alpha_m2s_for_range / (Math.PI * b * b) : NaN;
+                    } else {
+                        result.f_min_linearity = NaN; result.f_max_linearity = NaN;
+                    }
+                };
+
+                if (analyzeAll) {
+                    analysisResults.forEach(result => {
+                        performAnalysisOnDataset(result, { min: result.minFitFreq, max: result.maxFitFreq });
+                    });
                 } else {
-                    result.maxPowerPerLength = NaN;
-                }
-
-                result.processedData.forEach(p => {
-                    if (p.v3_in_phase_norm_uncorrected === undefined) p.v3_in_phase_norm_uncorrected = p.v3_in_phase_norm;
-                    if (p.v3_out_of_phase_norm_uncorrected === undefined) p.v3_out_of_phase_norm_uncorrected = p.v3_out_of_phase_norm;
-                    p.v3_in_phase_norm = p.v3_in_phase_norm_uncorrected * phaseFactor;
-                    p.v3_out_of_phase_norm = p.v3_out_of_phase_norm_uncorrected * phaseFactor;
-                });
-
-                const dataForFit = result.processedData.filter(d => d.freq >= fitRange.min && d.freq <= fitRange.max && d.isValid && !isNaN(d.v3_in_phase_norm));
-                
-                let inPhaseFit, outOfPhaseFit;
-                if (fitMethod === 'robust') {
-                    inPhaseFit = robustLinearRegression(dataForFit, 'ln_2omega', 'v3_in_phase_norm', 'esdV3X_norm');
-                    outOfPhaseFit = robustLinearRegression(dataForFit, 'ln_2omega', 'v3_out_of_phase_norm', 'esdV3Y_norm');
-                } else {
-                    inPhaseFit = weightedLinearRegression(dataForFit, 'ln_2omega', 'v3_in_phase_norm', 'esdV3X_norm');
-                    outOfPhaseFit = weightedLinearRegression(dataForFit, 'ln_2omega', 'v3_out_of_phase_norm', 'esdV3Y_norm');
-                }
-
-                let k = NaN, esd_k = NaN;
-                if (inPhaseFit.slope !== 0) {
-                    k = -(Math.pow(result.R0, 2) * alpha_tcr) / (4 * Math.PI * L * inPhaseFit.slope);
-                    const rel_err_slope_sq = Math.pow(inPhaseFit.esd_slope / inPhaseFit.slope, 2);
-                    const rel_err_R0_sq = (result.R0 > 0 && result.esd_R0 > 0) ? 4 * Math.pow(result.esd_R0 / result.R0, 2) : 0;
-                    const rel_err_L_sq = Math.pow(rel_err_L, 2);
-                    esd_k = Math.abs(k) * Math.sqrt(rel_err_slope_sq + rel_err_R0_sq + rel_err_tcr_sq + rel_err_L_sq);
-                }
-                
-                let alpha_diffusivity_m2s = NaN, esd_alpha_diffusivity_m2s = NaN;
-                const S = inPhaseFit.slope, Ix = inPhaseFit.intercept;
-                const esd_S = inPhaseFit.esd_slope, esd_Ix = inPhaseFit.esd_intercept;
-                if (S !== 0) {
-                    const eulerGamma = 0.5772156;
-                    alpha_diffusivity_m2s = (b * b * Math.exp(eulerGamma) / 8) * Math.exp(-Ix / S);
-                    if (esd_S > 0 && esd_Ix > 0) {
-                        const rel_err_b_sq = Math.pow(rel_err_two_b, 2);
-                        const term_err_Ix_sq = Math.pow(esd_Ix / S, 2);
-                        const term_err_S_sq = Math.pow(Ix * esd_S / (S * S), 2);
-                        esd_alpha_diffusivity_m2s = Math.abs(alpha_diffusivity_m2s) * Math.sqrt(4 * rel_err_b_sq + term_err_Ix_sq + term_err_S_sq);
+                    const result = analysisResults[selectedDatasetIndex];
+                    if (result) {
+                        const minFitFreq = parseFloat(document.getElementById('fit-fmin').value);
+                        const maxFitFreq = parseFloat(document.getElementById('fit-fmax').value);
+                        result.minFitFreq = minFitFreq;
+                        result.maxFitFreq = maxFitFreq;
+                        performAnalysisOnDataset(result, { min: minFitFreq, max: maxFitFreq });
                     }
                 }
-
-                result.k = k; result.esd_k = esd_k;
-                result.alpha = alpha_diffusivity_m2s * 1e6; result.esd_alpha = esd_alpha_diffusivity_m2s * 1e6;
                 
-                if (alpha_diffusivity_m2s > 0) {
-                    result.f_min_linearity = (d_s > 0) ? (C_min * C_min * alpha_diffusivity_m2s) / (4 * Math.PI * d_s * d_s) : NaN;
-                    result.f_max_linearity = (b > 0) ? alpha_diffusivity_m2s / (4 * Math.PI * Math.pow(C_max * b, 2)) : NaN;
-                } else {
-                    result.f_min_linearity = NaN; result.f_max_linearity = NaN;
+                const avg_alpha_m2s = d3.mean(analysisResults.filter(d => !isNaN(d.alpha)), d => d.alpha / 1e6);
+                if (avg_alpha_m2s > 0) {
+                    parsedFileContent.global_f_min_linearity = (d_s > 0) ? (C_min * C_min * avg_alpha_m2s) / (4 * Math.PI * d_s * d_s) : NaN;
+                    parsedFileContent.global_f_max_linearity = (b > 0) ? avg_alpha_m2s / (Math.PI * b * b) : NaN;
                 }
-                
-                result.inPhaseFitParams = { slope: inPhaseFit.slope, intercept: inPhaseFit.intercept };
-                result.outOfPhaseFitParams = { slope: outOfPhaseFit.slope, intercept: outOfPhaseFit.intercept };
-                result.fitData = dataForFit;
-            };
 
-            if (analyzeAll) {
-                analysisResults.forEach(result => {
-                    performAnalysisOnDataset(result, { min: result.minFitFreq, max: result.maxFitFreq });
-                });
-            } else {
-                const result = analysisResults[selectedDatasetIndex];
-                if (result) {
-                    const minFitFreq = parseFloat(document.getElementById('fit-fmin').value);
-                    const maxFitFreq = parseFloat(document.getElementById('fit-fmax').value);
-                    result.minFitFreq = minFitFreq;
-                    result.maxFitFreq = maxFitFreq;
-                    performAnalysisOnDataset(result, { min: minFitFreq, max: maxFitFreq });
-                }
-            }
-            
-            const avg_alpha_m2s = d3.mean(analysisResults, d => d.alpha / 1e6);
-            if (avg_alpha_m2s > 0) {
-                parsedFileContent.global_f_min_linearity = (d_s > 0) ? (C_min * C_min * avg_alpha_m2s) / (4 * Math.PI * d_s * d_s) : NaN;
-                parsedFileContent.global_f_max_linearity = (b > 0) ? avg_alpha_m2s / (4 * Math.PI * Math.pow(C_max * b, 2)) : NaN;
-            }
-
-            renderResultsUI();
-            updateVisualization();
+                renderResultsUI();
+                updateVisualization();
+                document.body.style.cursor = 'default';
+            }, 10);
         }
 
         function weightedPolynomialRegression2ndOrder(data) {
             const pointsToFit = data.filter(d => d.sigma > 0 && !isNaN(d.y));
-            const n = pointsToFit.length;
-
-            if (n < 2) return { success: false, c0: 0, c1: 0, c2: 0 };
-            if (n < 3) {
+            if (pointsToFit.length < 2) return { success: false, c0: 0, c1: 0, c2: 0 };
+            if (pointsToFit.length < 3) {
                 const fit = weightedLinearRegression(pointsToFit, 'x', 'y', 'sigma');
                 return { success: true, c0: fit.intercept, c1: fit.slope, c2: 0 };
             }
-
             let S_w = 0, S_wx = 0, S_wy = 0, S_wx2 = 0, S_wxy = 0, S_wx3 = 0, S_wx2y = 0, S_wx4 = 0;
-
             for (const p of pointsToFit) {
                 const w = 1 / (p.sigma * p.sigma);
-                const wx = w * p.x;
-                const wy = w * p.y;
-                const wx2 = wx * p.x;
+                const wx = w * p.x; const wy = w * p.y; const wx2 = wx * p.x;
                 S_w += w; S_wx += wx; S_wy += wy; S_wx2 += wx2;
                 S_wxy += wx * p.y; S_wx3 += wx2 * p.x;
                 S_wx2y += wx2 * p.y; S_wx4 += wx2 * p.x * p.x;
             }
-            
             const A = [ [S_w, S_wx, S_wx2], [S_wx, S_wx2, S_wx3], [S_wx2, S_wx3, S_wx4] ];
             const B = [S_wy, S_wxy, S_wx2y];
             const detA = A[0][0]*(A[1][1]*A[2][2] - A[1][2]*A[2][1]) - A[0][1]*(A[1][0]*A[2][2] - A[1][2]*A[2][0]) + A[0][2]*(A[1][0]*A[2][1] - A[1][1]*A[2][0]);
-
             if (Math.abs(detA) < 1e-12) return { success: false, c0: 0, c1: 0, c2: 0 };
-
             const detA0 = B[0]*(A[1][1]*A[2][2] - A[1][2]*A[2][1]) - A[0][1]*(B[1]*A[2][2] - A[1][2]*B[2]) + A[0][2]*(B[1]*A[2][1] - A[1][1]*B[2]);
             const detA1 = A[0][0]*(B[1]*A[2][2] - A[1][2]*B[2]) - B[0]*(A[1][0]*A[2][2] - A[1][2]*A[2][0]) + A[0][2]*(A[1][0]*B[2] - B[1]*A[2][0]);
             const detA2 = A[0][0]*(A[1][1]*B[2] - B[1]*A[2][1]) - A[0][1]*(A[1][0]*B[2] - B[1]*A[2][0]) + B[0]*(A[1][0]*A[2][1] - A[1][1]*A[2][0]);
-
             return { success: true, c0: detA0 / detA, c1: detA1 / detA, c2: detA2 / detA };
         }
 
         function weightedLinearRegression(data, xKey, yKey, sigmaKey) {
-            const pointsToFit = data.filter(d => d[sigmaKey] > 0 && !isNaN(d[yKey]));
-            if (pointsToFit.length < 2) return { slope: 0, intercept: 0, esd_slope: 0, esd_intercept: 0 };
-
+            const pointsToFit = data.filter(d => d[sigmaKey] > 0 && isFinite(d[sigmaKey]) && !isNaN(d[yKey]));
+            if (pointsToFit.length < 2) return { slope: NaN, intercept: NaN, esd_slope: NaN, esd_intercept: NaN };
             let sum_w = 0, sum_wx = 0, sum_wy = 0, sum_wxy = 0, sum_wxx = 0;
             for (const d of pointsToFit) {
                 const w = 1 / Math.pow(d[sigmaKey], 2);
@@ -904,330 +921,135 @@
                 sum_wxy += w * d[xKey] * d[yKey]; sum_wxx += w * d[xKey] * d[xKey];
             }
             const delta = sum_w * sum_wxx - sum_wx * sum_wx;
-            if (delta === 0) return { slope: 0, intercept: 0, esd_slope: 0, esd_intercept: 0 };
+            if (delta === 0) return { slope: NaN, intercept: NaN, esd_slope: NaN, esd_intercept: NaN };
             const slope = (sum_w * sum_wxy - sum_wx * sum_wy) / delta;
             const intercept = (sum_wxx * sum_wy - sum_wx * sum_wxy) / delta;
             return { slope, intercept, esd_slope: Math.sqrt(sum_w / delta), esd_intercept: Math.sqrt(sum_wxx / delta) };
         }
-
-        function robustLinearRegression(data, xKey, yKey, sigmaKey) {
-            let pointsToFit = data.filter(d => d[sigmaKey] > 0 && !isNaN(d[yKey]));
-            if (pointsToFit.length < 2) return { slope: 0, intercept: 0, esd_slope: 0, esd_intercept: 0 };
-
-            const MAX_ITERATIONS = 25; const TOLERANCE = 1e-6;
-            const initialFit = weightedLinearRegression(pointsToFit, xKey, yKey, sigmaKey);
-            let { slope, intercept, esd_slope, esd_intercept } = initialFit;
-            
-            pointsToFit.forEach(d => { d.robustWeight = 1 / Math.pow(d[sigmaKey], 2); });
-
-            for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
-                const residuals = pointsToFit.map(d => d[yKey] - (slope * d[xKey] + intercept));
-                const mad = d3.median(residuals.map(r => Math.abs(r - d3.median(residuals))));
-                if (mad === 0) break;
-
-                const c = 4.685, S = mad;
-                pointsToFit.forEach((d, i) => {
-                    const u = Math.abs(residuals[i] / (c * S));
-                    d.robustWeight = (u < 1) ? Math.pow(1 - u * u, 2) / Math.pow(d[sigmaKey], 2) : 0;
-                });
-
-                let sum_w = 0, sum_wx = 0, sum_wy = 0, sum_wxy = 0, sum_wxx = 0;
-                pointsToFit.forEach(d => {
-                    const w = d.robustWeight;
-                    sum_w += w; sum_wx += w * d[xKey]; sum_wy += w * d[yKey];
-                    sum_wxy += w * d[xKey] * d[yKey]; sum_wxx += w * d[xKey] * d[xKey];
-                });
-
-                const delta = sum_w * sum_wxx - sum_wx * sum_wx;
-                if (delta === 0) break; 
-                const newSlope = (sum_w * sum_wxy - sum_wx * sum_wy) / delta;
-                const newIntercept = (sum_wxx * sum_wy - sum_wx * sum_wxy) / delta;
-
-                if (Math.abs(newSlope - slope) < TOLERANCE && Math.abs(newIntercept - intercept) < TOLERANCE) {
-                    slope = newSlope; intercept = newIntercept; break;
-                }
-                slope = newSlope; intercept = newIntercept;
-            }
-
-            let final_sum_w = 0, final_sum_wxx = 0, final_sum_wx = 0;
-            pointsToFit.forEach(d => {
-                const w = d.robustWeight || 0;
-                final_sum_w += w; final_sum_wxx += w * d[xKey] * d[xKey]; final_sum_wx += w * d[xKey];
-            });
-
-            const final_delta = final_sum_w * final_sum_wxx - final_sum_wx * final_sum_wx;
-            if (final_delta > 0) {
-                esd_slope = Math.sqrt(final_sum_w / final_delta);
-                esd_intercept = Math.sqrt(final_sum_wxx / final_delta);
-            }
-            return { slope, intercept, esd_slope, esd_intercept };
-        }
-
-        function formatTimestamp(date) {
-            if (!(date instanceof Date) || isNaN(date)) return "Invalid Date";
-            const YYYY = date.getFullYear();
-            const MM = String(date.getMonth() + 1).padStart(2, '0');
-            const DD = String(date.getDate()).padStart(2, '0');
-            const hh = String(date.getHours()).padStart(2, '0');
-            const mm = String(date.getMinutes()).padStart(2, '0');
-            const ss = String(date.getSeconds()).padStart(2, '0');
-            return `${YYYY}-${MM}-${DD} ${hh}:${mm}:${ss}`;
-        }
-
-        function updateFittingUI() {
-            if (!analysisResults[selectedDatasetIndex]) return;
-            const { minFitFreq, maxFitFreq } = analysisResults[selectedDatasetIndex];
-            document.getElementById('fit-fmin').value = minFitFreq.toFixed(2);
-            document.getElementById('fit-fmax').value = maxFitFreq.toFixed(2);
-            document.getElementById('fit-fmin-slider').value = Math.log(minFitFreq);
-            document.getElementById('fit-fmax-slider').value = Math.log(maxFitFreq);
-        }
-
-function renderResultsUI() {
-            const recommendedRangeContainer = document.getElementById('recommended-fit-range-container');
-            const resultsContainer = document.getElementById('results-container');
-            
-            // Clear previous results
-            recommendedRangeContainer.innerHTML = '';
-            resultsContainer.innerHTML = '';
-
-            if (analysisResults.length === 0) return;
-            
-            // --- Populate Recommended Fit Range ---
-            const f_min = parsedFileContent.global_f_min_linearity;
-            const f_max = parsedFileContent.global_f_max_linearity;
-
-            if (!isNaN(f_min) && !isNaN(f_max)) {
-                let recommendedRangeHTML = '<div class="results-card">';
-                 if (f_min < 1e-6 || f_max > 1e11 || f_min >= f_max) {
-                         recommendedRangeHTML += `<p title="Calculation resulted in non-physical values.">Recommended Fit Range: <strong>N/A</strong></p>`;
-                 } else {
-                    const f_min_display = Math.max(0.001, f_min);
-                    const f_max_display = Math.min(1e6, f_max);
-                    const formatFreq = (f) => f >= 1e3 ? `${(f/1e3).toFixed(2)} kHz` : `${f.toFixed(2)} Hz`;
-                    recommendedRangeHTML += `<p title="f_min ensures substrate is thermally thick. f_max ensures 2D heat flow.">Recommended Fit Range: <strong>${formatFreq(f_min_display)} — ${formatFreq(f_max_display)}</strong></p>`;
-                 }
-                recommendedRangeHTML += '</div>';
-                recommendedRangeContainer.innerHTML = recommendedRangeHTML;
-            }
-
-            // --- Populate Per-Dataset Analysis ---
-            const analysisTitle = document.createElement('h2');
-            analysisTitle.textContent = 'Per-Dataset Analysis';
-            resultsContainer.appendChild(analysisTitle);
-            
-            const controlsContainer = document.createElement('div');
-            controlsContainer.id = 'dataset-controls';
-            controlsContainer.className = 'control-group';
-
-            const selector = document.createElement('select');
-            selector.id = 'dataset-selector';
-            analysisResults.forEach((result, index) => {
-                const option = document.createElement('option');
-                option.value = index;
-                // --- MODIFICATION IS HERE ---
-                const tempPrefix = result.avg_temp > 0 ? `${result.avg_temp.toFixed(2)} K: ` : '';
-                option.textContent = `${tempPrefix}${formatTimestamp(result.timestamp)}`;
-                // --- END MODIFICATION ---
-                if (index === selectedDatasetIndex) option.selected = true;
-                selector.appendChild(option);
-            });
-            
-            selector.addEventListener('change', (e) => {
-                selectedDatasetIndex = parseInt(e.target.value);
-                isShowingRTPlot = false; // Switch back to dataset view
-                updateFittingUI();
-                displaySingleResult();
-                updateVisualization();
-            });
-
-            const deleteBtn = document.createElement('button');
-            deleteBtn.id = 'delete-dataset-btn';
-            deleteBtn.innerHTML = '&#x1F5D1;';
-            deleteBtn.title = "Delete Selected Dataset";
-            deleteBtn.onclick = deleteSelectedDataset;
-
-            controlsContainer.appendChild(selector);
-            controlsContainer.appendChild(deleteBtn);
-            resultsContainer.appendChild(controlsContainer);
-            const cardContainer = document.createElement('div');
-            cardContainer.id = 'single-result-card-container';
-            resultsContainer.appendChild(cardContainer);
-            displaySingleResult();
-        }
-
-        function displaySingleResult() {
-            const cardContainer = document.getElementById('single-result-card-container');
-            if (!cardContainer || analysisResults.length === 0 || !analysisResults[selectedDatasetIndex]) {
-                if(cardContainer) cardContainer.innerHTML = '';
-                return;
-            }
-            const result = analysisResults[selectedDatasetIndex];
-
-            let alpha_text = `<strong>...</strong>`;
-            if(!isNaN(result.alpha)) {
-                alpha_text = `<strong>${result.alpha.toExponential(3)} ± ${result.esd_alpha.toExponential(1)} mm²/s</strong>`;
-            }
-
-            let maxPowerText = '...';
-            if (!isNaN(result.maxPowerPerLength)) {
-                maxPowerText = `<strong>${result.maxPowerPerLength.toFixed(2)} W/m</strong>`;
-            }
-            
-            cardContainer.innerHTML = `
-                <div class="results-card">
-                    <h3>Dataset: ${formatTimestamp(result.timestamp)}</h3>
-                    <p>Avg Temperature: <strong>${result.avg_temp > 0 ? result.avg_temp.toFixed(2) + ' K' : 'N/A'}</strong></p>
-                    <p>Resistance (R₀): <strong>${result.R0.toFixed(2)} ± ${result.esd_R0.toExponential(1)} Ω</strong></p>
-                    <p>Local TCR (α): <strong>${!isNaN(result.local_tcr) ? result.local_tcr.toExponential(2) : '...'} 1/K</strong></p>
-                    <p>Max Power: ${maxPowerText}</p>
-                    <p>Thermal Cond. (k): <strong>${!isNaN(result.k) ? result.k.toExponential(3) + ' ± ' + result.esd_k.toExponential(1) : '...'} W/mK</strong></p>
-                    <p>Thermal Diff. (α): ${alpha_text}</p>
-                </div>`;
-        }
-
-        function deleteSelectedDataset() {
-            if (analysisResults.length === 0) return;
-            const indexToDelete = selectedDatasetIndex;
-            
-            analysisResults.splice(indexToDelete, 1);
-            if (analysisResults.length === 0) {
-                selectedDatasetIndex = 0;
-                document.getElementById('results-container').innerHTML = '';
-                document.getElementById('fitting-controls').classList.add('hidden');
-                document.getElementById('save-report-btn').classList.add('hidden');
-                clearPlot();
-                return;
-            }
-            selectedDatasetIndex = Math.max(0, indexToDelete - 1);
-            isShowingRTPlot = false;
-            updateFittingUI();
-            analyzeAndDisplay(true); 
-        }
+        
+        function formatTimestamp(d){return d.toISOString().slice(0,19).replace('T',' ')}
+        function updateFittingUI(){if(!analysisResults[selectedDatasetIndex])return;const {minFitFreq,maxFitFreq}=analysisResults[selectedDatasetIndex];document.getElementById('fit-fmin').value=minFitFreq.toFixed(2);document.getElementById('fit-fmax').value=maxFitFreq.toFixed(2);document.getElementById('fit-fmin-slider').value=Math.log(minFitFreq);document.getElementById('fit-fmax-slider').value=Math.log(maxFitFreq);}
+        function renderResultsUI(){const rrC=document.getElementById('recommended-fit-range-container'),rC=document.getElementById('results-container');rrC.innerHTML='';rC.innerHTML='';if(analysisResults.length===0)return;const f_min=parsedFileContent.global_f_min_linearity,f_max=parsedFileContent.global_f_max_linearity;if(!isNaN(f_min)&&!isNaN(f_max)){let h='<div class="results-card">';if(f_min<1e-6||f_max>1e11||f_min>=f_max){h+='<p>Recommended Fit Range: <strong>N/A</strong></p>'}else{const fd=f=>f>=1e3?`${(f/1e3).toFixed(2)} kHz`:`${f.toFixed(2)} Hz`;h+=`<p>Recommended Fit Range: <strong>${fd(Math.max(.001,f_min))} — ${fd(Math.min(1e6,f_max))}</strong></p>`}h+='</div>';rrC.innerHTML=h}const aT=document.createElement('h2');aT.textContent='Per-Dataset Analysis';rC.appendChild(aT);const cC=document.createElement('div');cC.id='dataset-controls';cC.className='control-group';const nav=document.createElement('div');nav.id='dataset-navigation';const pB=document.createElement('button');pB.id='prev-dataset-btn';pB.className='nav-btn';pB.innerHTML='▲';const nB=document.createElement('button');nB.id='next-dataset-btn';nB.className='nav-btn';nB.innerHTML='▼';nav.appendChild(pB);nav.appendChild(nB);const s=document.createElement('select');s.id='dataset-selector';analysisResults.forEach((r,i)=>{const o=document.createElement('option');o.value=i;const p=r.avg_temp>0?`${r.avg_temp.toFixed(2)} K: `:``;o.textContent=`${p}${formatTimestamp(r.timestamp)}`;if(i===selectedDatasetIndex)o.selected=true;s.appendChild(o)});pB.onclick=()=>{if(selectedDatasetIndex>0){selectedDatasetIndex--;s.value=selectedDatasetIndex;s.dispatchEvent(new Event('change'))}};nB.onclick=()=>{if(selectedDatasetIndex<analysisResults.length-1){selectedDatasetIndex++;s.value=selectedDatasetIndex;s.dispatchEvent(new Event('change'))}};s.addEventListener('change',e=>{selectedDatasetIndex=parseInt(e.target.value);isShowingRTPlot=false;updateFittingUI();displaySingleResult();updateVisualization()});const dB=document.createElement('button');dB.id='delete-dataset-btn';dB.innerHTML='&#x1F5D1;';dB.title="Delete Selected Dataset";dB.onclick=deleteSelectedDataset;cC.appendChild(nav);cC.appendChild(s);cC.appendChild(dB);rC.appendChild(cC);const caC=document.createElement('div');caC.id='single-result-card-container';rC.appendChild(caC);displaySingleResult()}
+        function displaySingleResult(){const cC=document.getElementById('single-result-card-container');if(!cC||analysisResults.length===0||!analysisResults[selectedDatasetIndex]){if(cC)cC.innerHTML='';return}const r=analysisResults[selectedDatasetIndex],f_s=r.fitParams!==null&&!isNaN(r.k),f_r=r.failReason||"";let a_t='<strong>...</strong>';if(f_s)a_t=`<strong>${r.alpha.toExponential(3)} ± ${r.esd_alpha.toExponential(1)} mm²/s</strong>`;let mPT='...';if(!isNaN(r.maxPowerPerLength))mPT=`<strong>${r.maxPowerPerLength.toFixed(2)} W/m</strong>`;cC.innerHTML=`<div class="results-card" style="${!f_s?'border-left-color: #ef4444;':''}">${!f_s?`<h3>Dataset: ${formatTimestamp(r.timestamp)} (FIT FAILED)</h3><p style="color: #dc2626; font-weight: bold;">${f_r}</p>`:`<h3>Dataset: ${formatTimestamp(r.timestamp)}</h3>`}<p>Avg Temperature: <strong>${r.avg_temp>0?r.avg_temp.toFixed(2)+' K':'N/A'}</strong></p><p>Resistance (R₀): <strong>${r.R0.toFixed(2)} ± ${r.esd_R0.toExponential(1)} Ω</strong></p><p>Local TCR (α): <strong>${!isNaN(r.local_tcr)?r.local_tcr.toExponential(2):'...'} 1/K</strong></p><p>Max Power: ${mPT}</p><p>Thermal Cond. (k): <strong>${f_s?r.k.toExponential(3)+' ± '+r.esd_k.toExponential(1):'...'} W/mK</strong></p><p>Thermal Diff. (α): ${a_t}</p></div>`}
+        function deleteSelectedDataset(){if(analysisResults.length===0)return;analysisResults.splice(selectedDatasetIndex,1);if(analysisResults.length===0){selectedDatasetIndex=0;document.getElementById('results-container').innerHTML='';document.getElementById('fitting-controls').classList.add('hidden');document.getElementById('save-report-btn').classList.add('hidden');clearPlot();return}selectedDatasetIndex=Math.max(0,selectedDatasetIndex-1);isShowingRTPlot=false;updateFittingUI();analyzeAndDisplay(true)}
 
         function updateVisualization() {
             if (isShowingRTPlot) {
                 drawRTPlot();
             } else {
-                drawDatasetPlot();
+                draw3DPlot();
             }
         }
 
-        const margin = { top: 60, right: 100, bottom: 120, left: 80 };
-        const plotContainer = d3.select("#plot-container");
+        const plotContainer = document.getElementById("plot-container");
 
         function clearPlot() {
-            plotContainer.html(''); // Clears all content (SVGs, DIVs, etc.)
-        }
-
-        function initDatasetPlot() {
-            clearPlot();
-            const bounds = plotContainer.node().getBoundingClientRect();
-            if (bounds.width <= 0 || bounds.height <= 0) return false;
-            const height = bounds.height, width = bounds.width;
-
-            const svg = plotContainer.append("svg").attr("viewBox", `0 0 ${width} ${height}`);
-            const plotArea = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
-            
-            plotArea.append("g").attr("class", "axis x-axis-bottom");
-            plotArea.append("g").attr("class", "axis x-axis-top");
-            plotArea.append("g").attr("class", "axis y-axis-left");
-            plotArea.append("g").attr("class", "axis y-axis-right");
-
-            svg.append("text").attr("class", "axis-label").attr("id", "x-label-bottom").attr("text-anchor", "middle");
-            svg.append("text").attr("class", "axis-label").attr("id", "x-label-top").attr("text-anchor", "middle");
-            svg.append("text").attr("class", "axis-label y-label-left").attr("id", "y-label-left").attr("transform", "rotate(-90)").attr("text-anchor", "middle");
-            svg.append("text").attr("class", "axis-label y-label-right").attr("id", "y-label-right").attr("transform", "rotate(90)").attr("text-anchor", "middle");
-            
-            plotArea.append("g").attr("class", "error-bars");
-            plotArea.append("g").attr("class", "plot-dots"); 
-            plotArea.append("line").attr("class", "fit-marker").attr("id", "fmin-marker");
-            plotArea.append("line").attr("class", "fit-marker").attr("id", "fmax-marker");
-            plotArea.append("path").attr("class", "line fit-line-in-phase");
-            plotArea.append("path").attr("class", "line fit-line-out-of-phase");
-            return true;
-        }
-
-        function drawDatasetPlot() {
-            if (!analysisResults[selectedDatasetIndex]) { clearPlot(); return; };
-            currentPlotData = analysisResults[selectedDatasetIndex];
-
-            const { processedData, fitData, inPhaseFitParams, outOfPhaseFitParams, minFitFreq, maxFitFreq } = currentPlotData;
-            if (!processedData || processedData.length === 0) { clearPlot(); return; }
-
-            if (!initDatasetPlot()) return;
-            const svg = plotContainer.select("svg");
-
-            const bounds = plotContainer.node().getBoundingClientRect();
-            const width = bounds.width, height = bounds.height;
-            const plotWidth = width - margin.left - margin.right;
-            const plotHeight = height - margin.top - margin.bottom;
-
-            const xScale = d3.scaleLinear().domain(d3.extent(processedData, d => d.ln_2omega)).range([0, plotWidth]);
-            const xScaleTop = d3.scaleLog().domain(d3.extent(processedData, d => d.freq)).range([0, plotWidth]);
-            
-            const validData = processedData.filter(d => d.isValid && !isNaN(d.v3_in_phase_norm) && !isNaN(d.v3_out_of_phase_norm));
-            const yLeftMin = d3.min(validData, d => d.v3_in_phase_norm - d.esdV3X_norm);
-            const yLeftMax = d3.max(validData, d => d.v3_in_phase_norm + d.esdV3X_norm);
-            const yScaleLeft = d3.scaleLinear().domain([yLeftMin, yLeftMax]).range([plotHeight, 0]).nice();
-
-            const yRightMin = d3.min(validData, d => d.v3_out_of_phase_norm - d.esdV3Y_norm);
-            const yRightMax = d3.max(validData, d => d.v3_out_of_phase_norm + d.esdV3Y_norm);
-            const yScaleRight = d3.scaleLinear().domain([yRightMin, yRightMax]).range([plotHeight, 0]).nice();
-            
-            svg.select(".x-axis-bottom").attr("transform", `translate(0,${plotHeight})`).call(d3.axisBottom(xScale));
-            svg.select(".x-axis-top").call(d3.axisTop(xScaleTop).ticks(5, ".0e"));
-            svg.select(".y-axis-left").call(d3.axisLeft(yScaleLeft).tickFormat(d3.format(".2e")));
-            svg.select(".y-axis-right").attr("transform", `translate(${plotWidth}, 0)`).call(d3.axisRight(yScaleRight).tickFormat(d3.format(".2e")));
-
-            svg.select("#x-label-bottom").attr("x", margin.left + plotWidth / 2).attr("y", height - 50).text("ln(2ω)");
-            svg.select("#x-label-top").attr("x", margin.left + plotWidth / 2).attr("y", 35).text("Frequency (Hz)");
-            svg.select("#y-label-left").attr("y", 15).attr("x", 0 - (margin.top + plotHeight / 2)).text("V3/I³ In-Phase (V/A³)");
-            svg.select("#y-label-right").attr("y", -(width - 25)).attr("x", (margin.top + plotHeight / 2)).text("V3/I³ Out-of-Phase (V/A³)");
-            
-            const xMin = (minFitFreq >= xScaleTop.domain()[0]) ? xScale(Math.log(2 * 2 * Math.PI * minFitFreq)) : -1;
-            svg.select("#fmin-marker").attr("x1", xMin).attr("y1", 0).attr("x2", xMin).attr("y2", plotHeight).style("display", xMin >= 0 ? null : "none");
-            const xMax = (maxFitFreq <= xScaleTop.domain()[1]) ? xScale(Math.log(2 * 2 * Math.PI * maxFitFreq)) : -1;
-            svg.select("#fmax-marker").attr("x1", xMax).attr("y1", 0).attr("x2", xMax).attr("y2", plotHeight).style("display", xMax >= 0 ? null : "none");
-
-            const dotsGroup = svg.select(".plot-dots");
-            dotsGroup.selectAll("*").remove();
-            dotsGroup.selectAll(".dot-in-phase").data(processedData).enter().append("circle").attr("cx", d => xScale(d.ln_2omega)).attr("cy", d => yScaleLeft(d.v3_in_phase_norm)).attr("r", d => d.isValid ? 4 : 2).style("fill", d => d.isValid ? "#3B82F6" : "#cccccc");
-            dotsGroup.selectAll(".dot-out-of-phase").data(processedData).enter().append("circle").attr("cx", d => xScale(d.ln_2omega)).attr("cy", d => yScaleRight(d.v3_out_of_phase_norm)).attr("r", d => d.isValid ? 4 : 2).style("fill", d => d.isValid ? "#F59E0B" : "#cccccc");
-
-            const errorBarsGroup = svg.select(".error-bars");
-            errorBarsGroup.selectAll("*").remove();
-            const capWidth = 3;
-            const errInPhase = errorBarsGroup.selectAll(".error-bar-in-phase").data(validData).enter().append("g").style("stroke", "#3B82F6");
-            errInPhase.append("line").attr("x1", d => xScale(d.ln_2omega)).attr("x2", d => xScale(d.ln_2omega)).attr("y1", d => yScaleLeft(d.v3_in_phase_norm - d.esdV3X_norm)).attr("y2", d => yScaleLeft(d.v3_in_phase_norm + d.esdV3X_norm));
-            
-            const errOutOfPhase = errorBarsGroup.selectAll(".error-bar-out-of-phase").data(validData).enter().append("g").style("stroke", "#F59E0B");
-            errOutOfPhase.append("line").attr("x1", d => xScale(d.ln_2omega)).attr("x2", d => xScale(d.ln_2omega)).attr("y1", d => yScaleRight(d.v3_out_of_phase_norm - d.esdV3Y_norm)).attr("y2", d => yScaleRight(d.v3_out_of_phase_norm + d.esdV3Y_norm));
-           
-            if(fitData && fitData.length > 1) {
-                if(inPhaseFitParams) svg.select(".fit-line-in-phase").datum(fitData).attr("d", d3.line().x(d => xScale(d.ln_2omega)).y(d => yScaleLeft(d.ln_2omega * inPhaseFitParams.slope + inPhaseFitParams.intercept)));
-                if(outOfPhaseFitParams) svg.select(".fit-line-out-of-phase").datum(fitData).attr("d", d3.line().x(d => xScale(d.ln_2omega)).y(d => yScaleRight(d.ln_2omega * outOfPhaseFitParams.slope + outOfPhaseFitParams.intercept)));
-            } else {
-                svg.select(".fit-line-in-phase").attr("d", null);
-                svg.select(".fit-line-out-of-phase").attr("d", null);
+            if (plotContainer) {
+                 try { Plotly.purge(plotContainer); } catch(e) {}
+                 plotContainer.innerHTML = ''; 
             }
         }
+
+        function draw3DPlot() {
+            clearPlot();
+            if (!analysisResults[selectedDatasetIndex]) return;
+
+            const result = analysisResults[selectedDatasetIndex];
+            const plotData = result.plotData;
+            
+            if (!plotData || plotData.length === 0) {
+                plotContainer.innerHTML = `<div style="text-align:center; padding-top:50px;">No valid data to plot for this dataset. ${result.failReason || ''}</div>`;
+                return;
+            }
+
+            const dataInRange = plotData.filter(d => d.freq >= result.minFitFreq && d.freq <= result.maxFitFreq);
+            const dataOutOfRange = plotData.filter(d => d.freq < result.minFitFreq || d.freq > result.maxFitFreq);
+
+            const traceInRange = {
+                x: dataInRange.map(d => d.ln_2omega),
+                y: dataInRange.map(d => d.i_cubed),
+                z: dataInRange.map(d => d.v3),
+                mode: 'markers',
+                type: 'scatter3d',
+                name: 'Data (in fit)',
+                marker: { size: 4, color: '#007bff', opacity: 0.8 }
+            };
+
+            const traceOutOfRange = {
+                x: dataOutOfRange.map(d => d.ln_2omega),
+                y: dataOutOfRange.map(d => d.i_cubed),
+                z: dataOutOfRange.map(d => d.v3),
+                mode: 'markers',
+                type: 'scatter3d',
+                name: 'Data (excluded)',
+                marker: { size: 4, color: '#cccccc', opacity: 0.5 }
+            };
+
+            const plotTraces = [traceInRange, traceOutOfRange];
+            
+            if (result.fitParams && dataInRange.length > 0) {
+                const p1 = result.fitParams.p1;
+                const p2 = result.fitParams.p2;
+
+                const ln_2omega_range = d3.extent(dataInRange, d => d.ln_2omega);
+                const i_cubed_range = d3.extent(dataInRange, d => d.i_cubed);
+                
+                const surface_x = d3.range(ln_2omega_range[0], ln_2omega_range[1] + 1e-9, (ln_2omega_range[1]-ln_2omega_range[0])/20 || 1);
+                const surface_y = d3.range(i_cubed_range[0], i_cubed_range[1] + 1e-9, (i_cubed_range[1]-i_cubed_range[0])/20 || 1);
+                
+                const surface_z = surface_y.map(y_val => {
+                    return surface_x.map(x_val => p1 * y_val * (p2 - x_val));
+                });
+                
+                const surfaceTrace = {
+                    x: surface_x,
+                    y: surface_y,
+                    z: surface_z,
+                    type: 'surface',
+                    name: 'Fit',
+                    opacity: 0.7,
+                    colorscale: 'Blues',
+                    reversescale: true,
+                    showscale: false
+                };
+                plotTraces.push(surfaceTrace);
+            }
+            
+            const layout = {
+                title: '3D Surface Fit of V<sub>3ω</sub>',
+                scene: {
+                    xaxis:{title: 'ln(2ω)'},
+                    yaxis:{title: 'I³ (A³)'},
+                    zaxis:{title: 'V₃ In-Phase (V)'},
+                },
+                margin: { l: 0, r: 0, b: 0, t: 40 },
+                showlegend: true,
+                legend: { x: 0.8, y: 0.95 }
+            };
+            
+            Plotly.newPlot(plotContainer, plotTraces, layout, {responsive: true});
+        }
+
 
         function drawRTPlot() {
             clearPlot();
 
             const plotData = analysisResults.map(d => ({ x: d.avg_temp, y: d.R0, sigma: d.esd_R0 })).filter(d => d.x > 0 && !isNaN(d.y));
             if (plotData.length === 0) {
-                plotContainer.append("div").style("text-align", "center").style("padding-top", "50px").text("Not enough data to display R(T) plot.");
+                plotContainer.innerHTML = '<div style="text-align:center; padding-top:50px;">Not enough data to display R(T) plot.</div>';
                 return;
             }
-
-            const bounds = plotContainer.node().getBoundingClientRect();
+            
+            const d3PlotDiv = document.createElement('div');
+            d3PlotDiv.classList.add('svg-container');
+            plotContainer.appendChild(d3PlotDiv);
+            
+            const bounds = d3PlotDiv.getBoundingClientRect();
             if (bounds.width <= 0 || bounds.height <= 0) return;
             const height = bounds.height, width = bounds.width;
 
             const plot_margin = { top: 40, right: 40, bottom: 60, left: 80 };
-            const svg = plotContainer.append("svg").attr("viewBox", `0 0 ${width} ${height}`);
+            const svg = d3.select(d3PlotDiv).append("svg").attr("viewBox", `0 0 ${width} ${height}`);
             const plotArea = svg.append("g").attr("transform", `translate(${plot_margin.left},${plot_margin.top})`);
             const plotWidth = width - plot_margin.left - plot_margin.right;
             const plotHeight = height - plot_margin.top - plot_margin.bottom;
@@ -1247,7 +1069,7 @@ function renderResultsUI() {
             plotArea.append("g").attr("class", "axis").attr("transform", `translate(0,${plotHeight})`).call(d3.axisBottom(xScale));
             plotArea.append("g").attr("class", "axis").call(d3.axisLeft(yScale));
 
-            svg.append("text").attr("class", "axis-label").attr("x", plot_margin.left + plotWidth / 2).attr("y", height - 10).text("Temperature (K)");
+            svg.append("text").attr("class", "axis-label").attr("x", plot_margin.left + plotWidth / 2).attr("y", height - 10).attr('text-anchor', 'middle').text("Temperature (K)");
             svg.append("text").attr("class", "axis-label").attr("transform", "rotate(-90)").attr("y", 15).attr("x", 0 - (plot_margin.top + plotHeight / 2)).attr("text-anchor", "middle").text("Resistance (R₀) [Ω]");
             
             const capWidth = 3;
@@ -1265,15 +1087,179 @@ function renderResultsUI() {
             if (![C0, C1, C2].some(isNaN)) {
                 const curve_points = d3.range(xScale.domain()[0], xScale.domain()[1], (xScale.domain()[1] - xScale.domain()[0]) / 100);
                 const line = d3.line().x(d => xScale(d)).y(d => yScale(C2 * d * d + C1 * d + C0));
-                plotArea.append("path").datum(curve_points).attr("class", "rt-fit-line").attr("fill", "none").attr("d", line);
+                plotArea.append("path").datum(curve_points).attr("class", "rt-fit-line").attr("d", line);
             }
         }
+
         
         function sanitizeForPDF(text) {
-            return text.replace(/Ω/g, 'Ohm').replace(/α/g, 'alpha').replace(/₀/g, '0').replace(/₁/g, '1').replace(/₂/g, '2').replace(/ₛ/g, 's').replace(/±/g, '+/-');
+            // Replaces special characters with PDF-safe equivalents
+            if (typeof text !== 'string') {
+                return text;
+            }
+            return text
+                .replace(/Ω/g, 'Ohm')
+                .replace(/α/g, 'alpha')
+                .replace(/Δ/g, 'Delta')
+                .replace(/ω/g, 'w')
+                .replace(/±/g, '+/-')
+                .replace(/₀/g, '0')
+                .replace(/₁/g, '1')
+                .replace(/₂/g, '2')
+                .replace(/₃/g, '3')
+                .replace(/ₛ/g, 's');
+        }
+
+function drawSummaryPlot(data, container) {
+            const plotMargin = { top: 40, right: 60, bottom: 50, left: 60 };
+            const width = 700 - plotMargin.left - plotMargin.right;
+            const height = 400 - plotMargin.top - plotMargin.bottom;
+
+            // Ensure the container is ready
+            container.html('');
+            const svg = container.append("svg")
+                .attr("width", width + plotMargin.left + plotMargin.right)
+                .attr("height", height + plotMargin.top + plotMargin.bottom)
+                .append("g")
+                .attr("transform", `translate(${plotMargin.left},${plotMargin.top})`);
+            
+            const validData = data.filter(d => !isNaN(d.k) && !isNaN(d.alpha) && d.fitParams);
+            if (validData.length === 0) return;
+
+            const xScale = d3.scalePoint().domain(validData.map((d, i) => i + 1)).range([0, width]).padding(0.5);
+            
+            const kExtent = d3.extent(validData, d => d.k);
+            const alphaExtent = d3.extent(validData, d => d.alpha);
+
+            const y1Scale = d3.scaleLinear().domain([kExtent[0] * 0.9, kExtent[1] * 1.1]).range([height, 0]).nice();
+            const y2Scale = d3.scaleLinear().domain([alphaExtent[0] * 0.9, alphaExtent[1] * 1.1]).range([height, 0]).nice();
+
+            // Axes
+            svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(xScale));
+            svg.append("g").call(d3.axisLeft(y1Scale).tickFormat(d3.format(".2s"))).style("color", "#1E40AF");
+            svg.append("g").attr("transform", `translate(${width},0)`).call(d3.axisRight(y2Scale).tickFormat(d3.format(".2s"))).style("color", "#B45309");
+
+            // Labels
+            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", height + 40).text("Dataset Index");
+            svg.append("text").attr("text-anchor", "middle").attr("transform", "rotate(-90)").attr("y", -plotMargin.left + 20).attr("x", -height / 2).text("Thermal Conductivity (k) [W/mK]").style("fill", "#1E40AF");
+            svg.append("text").attr("text-anchor", "middle").attr("transform", "rotate(90)").attr("y", -width - plotMargin.right + 40).attr("x", height / 2).text("Thermal Diffusivity (α) [mm²/s]").style("fill", "#B45309");
+            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", -15).text("Summary of Results").style("font-size", "16px").style("font-weight", "bold");
+            
+            // Data points and error bars
+            svg.selectAll(".dot-k").data(validData).enter().append("circle").attr("cx", (d, i) => xScale(i + 1)).attr("cy", d => y1Scale(d.k)).attr("r", 5).style("fill", "#1E40AF");
+            svg.selectAll(".dot-alpha").data(validData).enter().append("circle").attr("cx", (d, i) => xScale(i + 1)).attr("cy", d => y2Scale(d.alpha)).attr("r", 5).style("fill", "#B45309");
+        }
+
+        function drawRvTPlot(data, container) {
+            const plotData = data.map(d => ({ x: d.avg_temp, y: d.R0, sigma: d.esd_R0 })).filter(d => d.x > 0 && !isNaN(d.y));
+            if (plotData.length < 1) return;
+            
+            container.html('');
+            const bounds = container.node().getBoundingClientRect();
+            const height = 400, width = bounds.width;
+            const margin = { top: 40, right: 40, bottom: 60, left: 80 };
+
+            const svg = container.append("svg").attr("viewBox", `0 0 ${width} ${height}`);
+            const plotArea = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+            const plotWidth = width - margin.left - margin.right;
+            const plotHeight = height - margin.top - margin.bottom;
+            
+            const xExtent = d3.extent(plotData, d => d.x);
+            const yExtent = d3.extent(plotData, d => d.y);
+            const yPadding = (yExtent[1] - yExtent[0]) * 0.1 || Math.abs(yExtent[0] * 0.1) || 1;
+
+            const xScale = d3.scaleLinear().domain([xExtent[0] - 5, xExtent[1] + 5]).range([0, plotWidth]).nice();
+            const yScale = d3.scaleLinear().domain([yExtent[0] - yPadding, yExtent[1] + yPadding]).range([plotHeight, 0]).nice();
+
+            plotArea.append("g").attr("class", "axis").attr("transform", `translate(0,${plotHeight})`).call(d3.axisBottom(xScale));
+            plotArea.append("g").attr("class", "axis").call(d3.axisLeft(yScale));
+
+            svg.append("text").attr("class", "axis-label").attr("x", margin.left + plotWidth / 2).attr("y", height - 10).attr('text-anchor', 'middle').text("Temperature (K)");
+            svg.append("text").attr("class", "axis-label").attr("transform", "rotate(-90)").attr("y", 15).attr("x", 0 - (margin.top + plotHeight / 2)).attr("text-anchor", "middle").text("Resistance (R₀) [Ω]");
+            svg.append("text").attr("class", "axis-label").attr("x", width/2).attr("y", margin.top-10).attr('text-anchor', 'middle').style("font-size", "18px").text("Resistance vs. Temperature");
+            
+            plotArea.append("g").selectAll("line").data(plotData).enter().append("line").attr("class", "rt-error-bar").attr("x1", d=>xScale(d.x)).attr("x2", d=>xScale(d.x)).attr("y1", d=>yScale(d.y-d.sigma)).attr("y2", d=>yScale(d.y+d.sigma));
+            plotArea.append("g").selectAll("circle").data(plotData).enter().append("circle").attr("class", "rt-data-point").attr("cx", d => xScale(d.x)).attr("cy", d => yScale(d.y)).attr("r", 4);
+            
+            const C0 = parseFloat(document.getElementById('tcr-c0').value);
+            const C1 = parseFloat(document.getElementById('tcr-c1').value);
+            const C2 = parseFloat(document.getElementById('tcr-c2').value);
+
+            if (![C0, C1, C2].some(isNaN)) {
+                const curve_points = d3.range(xScale.domain()[0], xScale.domain()[1], (xScale.domain()[1] - xScale.domain()[0]) / 100);
+                const line = d3.line().x(d => xScale(d)).y(d => yScale(C2 * d * d + C1 * d + C0));
+                plotArea.append("path").datum(curve_points).attr("class", "rt-fit-line").attr("d", line);
+            }
+        }
+
+        function drawConductivityVsTempPlot(data, container) {
+            const plotData = data.map(d => ({ x: d.avg_temp, y: d.k, sigma: d.esd_k })).filter(d => d.x > 0 && !isNaN(d.y));
+            if (plotData.length < 1) return;
+
+            container.html('');
+            const bounds = container.node().getBoundingClientRect();
+            const height = 400, width = bounds.width;
+            const margin = { top: 40, right: 40, bottom: 60, left: 80 };
+
+            const svg = container.append("svg").attr("viewBox", `0 0 ${width} ${height}`);
+            const plotArea = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+            const plotWidth = width - margin.left - margin.right;
+            const plotHeight = height - margin.top - margin.bottom;
+
+            const xExtent = d3.extent(plotData, d => d.x);
+            const yExtent = d3.extent(plotData, d => d.y);
+            const yPadding = (yExtent[1] - yExtent[0]) * 0.1 || Math.abs(yExtent[0] * 0.1) || 1;
+
+            const xScale = d3.scaleLinear().domain([xExtent[0] - 5, xExtent[1] + 5]).range([0, plotWidth]).nice();
+            const yScale = d3.scaleLinear().domain([0, yExtent[1] + yPadding]).range([plotHeight, 0]).nice();
+            
+            plotArea.append("g").attr("class", "axis").attr("transform", `translate(0,${plotHeight})`).call(d3.axisBottom(xScale));
+            plotArea.append("g").attr("class", "axis").call(d3.axisLeft(yScale));
+
+            svg.append("text").attr("class", "axis-label").attr("x", margin.left + plotWidth / 2).attr("y", height - 10).attr('text-anchor', 'middle').text("Temperature (K)");
+            svg.append("text").attr("class", "axis-label").attr("transform", "rotate(-90)").attr("y", 15).attr("x", 0 - (margin.top + plotHeight / 2)).attr("text-anchor", "middle").text("Thermal Conductivity (W/mK)");
+            svg.append("text").attr("class", "axis-label").attr("x", width/2).attr("y", margin.top-10).attr('text-anchor', 'middle').style("font-size", "18px").text("Conductivity vs. Temperature");
+
+            plotArea.append("g").selectAll("line").data(plotData).enter().append("line").attr("class", "rt-error-bar").attr("x1", d=>xScale(d.x)).attr("x2", d=>xScale(d.x)).attr("y1", d=>yScale(d.y-d.sigma)).attr("y2", d=>yScale(d.y+d.sigma));
+            plotArea.append("g").selectAll("circle").data(plotData).enter().append("circle").attr("class", "rt-data-point").attr("cx", d => xScale(d.x)).attr("cy", d => yScale(d.y)).attr("r", 4);
+        }
+
+        function drawDiffusivityVsTempPlot(data, container) {
+            const plotData = data.map(d => ({ x: d.avg_temp, y: d.alpha, sigma: d.esd_alpha })).filter(d => d.x > 0 && !isNaN(d.y));
+            if (plotData.length < 1) return;
+
+            container.html('');
+            const bounds = container.node().getBoundingClientRect();
+            const height = 400, width = bounds.width;
+            const margin = { top: 40, right: 40, bottom: 60, left: 80 };
+
+            const svg = container.append("svg").attr("viewBox", `0 0 ${width} ${height}`);
+            const plotArea = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+            const plotWidth = width - margin.left - margin.right;
+            const plotHeight = height - margin.top - margin.bottom;
+
+            const xExtent = d3.extent(plotData, d => d.x);
+            const yExtent = d3.extent(plotData, d => d.y);
+            const yPadding = (yExtent[1] - yExtent[0]) * 0.1 || Math.abs(yExtent[0] * 0.1) || 1;
+
+            const xScale = d3.scaleLinear().domain([xExtent[0] - 5, xExtent[1] + 5]).range([0, plotWidth]).nice();
+            const yScale = d3.scaleLinear().domain([0, yExtent[1] + yPadding]).range([plotHeight, 0]).nice();
+            
+            plotArea.append("g").attr("class", "axis").attr("transform", `translate(0,${plotHeight})`).call(d3.axisBottom(xScale));
+            plotArea.append("g").attr("class", "axis").call(d3.axisLeft(yScale));
+            
+            svg.append("text").attr("class", "axis-label").attr("x", margin.left + plotWidth / 2).attr("y", height - 10).attr('text-anchor', 'middle').text("Temperature (K)");
+            svg.append("text").attr("class", "axis-label").attr("transform", "rotate(-90)").attr("y", 15).attr("x", 0 - (margin.top + plotHeight / 2)).attr("text-anchor", "middle").text("Thermal Diffusivity (mm²/s)");
+            svg.append("text").attr("class", "axis-label").attr("x", width/2).attr("y", margin.top-10).attr('text-anchor', 'middle').style("font-size", "18px").text("Diffusivity vs. Temperature");
+            
+            plotArea.append("g").selectAll("line").data(plotData).enter().append("line").attr("class", "rt-error-bar").attr("x1", d=>xScale(d.x)).attr("x2", d=>xScale(d.x)).attr("y1", d=>yScale(d.y-d.sigma)).attr("y2", d=>yScale(d.y+d.sigma));
+            plotArea.append("g").selectAll("circle").data(plotData).enter().append("circle").attr("class", "rt-data-point").attr("cx", d => xScale(d.x)).attr("cy", d => yScale(d.y)).attr("r", 4);
         }
 
 async function exportPDFReport() {
+            // --- Make cursor busy ---
+            document.body.style.cursor = 'wait';
+
             const btn = document.getElementById('save-report-btn');
             btn.textContent = 'Generating...';
             btn.disabled = true;
@@ -1291,16 +1277,10 @@ async function exportPDFReport() {
                 pdf.setFontSize(20).text("3-Omega Analysis Report", pageWidth / 2, yPos, { align: 'center' });
                 yPos += 10;
 
-                // --- MODIFICATION START ---
-                // The following block is updated to correctly find the nested sample name.
                 let sampleName = 'N/A';
                 const header = parsedFileContent.jsonHeader;
                 if (header) {
-                    sampleName = header.exp?.Sample || // Checks for "exp": { "Sample": "..." }
-                                 header.exp?.sample || // Checks for "exp": { "sample": "..." }
-                                 header.Sample ||      // Checks for "Sample": "..."
-                                 header['sample name'] || // Checks for "sample name": "..."
-                                 'N/A';
+                    sampleName = header.exp?.Sample || header.exp?.sample || header.Sample || header['sample name'] || 'N/A';
                 }
 
                 const startTime = analysisResults.length > 0 ? analysisResults[0].timestamp : null;
@@ -1313,11 +1293,9 @@ async function exportPDFReport() {
                 yPos += 7;
                 pdf.setFontSize(12).text(`Data measured: ${measurementDateString}`, pageWidth / 2, yPos, { align: 'center' });
                 yPos += 7;
-                // --- MODIFICATION END ---
 
                 pdf.setFontSize(10).text(`Report generated: ${new Date().toLocaleString()}`, pageWidth / 2, yPos, { align: 'center' });
                 yPos += 12;
-
 
                 pdf.setFontSize(10).text("Data File Header Information", margin, yPos);
                 yPos += 6;
@@ -1402,7 +1380,6 @@ async function exportPDFReport() {
                     yPos_col1 += 4;
                     pdf.text(sanitizeForPDF(`R(T) Coeffs: C₀=${C0.toExponential(2)}, C₁=${C1.toExponential(2)}, C₂=${C2.toExponential(2)}`), col1_x, yPos_col1); yPos_col1 += 6;
 
-
                     pdf.text(sanitizeForPDF(`Avg Temperature: ${result.avg_temp > 0 ? result.avg_temp.toFixed(2) + ' K' : 'N/A'}`), col2_x, yPos_col2); yPos_col2 += 6;
                     pdf.text(sanitizeForPDF(`Resistance (R₀): ${result.R0.toFixed(2)} ± ${result.esd_R0.toExponential(1)} Ω`), col2_x, yPos_col2); yPos_col2 += 6;
                     pdf.text(sanitizeForPDF(`Local TCR (α): ${!isNaN(result.local_tcr) ? result.local_tcr.toExponential(2) : 'N/A'} 1/K`), col2_x, yPos_col2); yPos_col2 += 6;
@@ -1423,14 +1400,23 @@ async function exportPDFReport() {
                     
                     isShowingRTPlot = false;
                     updateVisualization();
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    await new Promise(resolve => setTimeout(resolve, 50));
                     
-                    const visArea = document.getElementById('visualization-area');
-                    const canvas = await html2canvas(visArea, { scale: 2, backgroundColor: '#ffffff' });
-                    const imgData = canvas.toDataURL('image/png');
+                    const plotDiv = document.getElementById('plot-container');
+                    const imgData = await Plotly.toImage(plotDiv, {
+                        format: 'png', 
+                        width: 1000,
+                        height: 750
+                    });
+
                     const availableHeight = pageHeight - yPos - margin;
-                    let imgWidth = pageWidth - 2 * margin, imgHeight = (canvas.height * imgWidth) / canvas.width;
-                    if (imgHeight > availableHeight) { imgHeight = availableHeight; imgWidth = (canvas.width * imgHeight) / canvas.height; }
+                    let imgWidth = pageWidth - 2 * margin;
+                    let imgHeight = (750 * imgWidth) / 1000; 
+
+                    if (imgHeight > availableHeight) {
+                        imgHeight = availableHeight;
+                        imgWidth = (1000 * imgHeight) / 750;
+                    }
                     pdf.addImage(imgData, 'PNG', (pageWidth - imgWidth) / 2, yPos, imgWidth, imgHeight);
                 }
 
@@ -1442,6 +1428,7 @@ async function exportPDFReport() {
                     
                     tempPlotContainer.html(''); 
                     drawSummaryPlot(analysisResults, tempPlotContainer);
+                    await new Promise(resolve => setTimeout(resolve, 300));
                     let canvas1 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
                     let imgWidth1 = pageWidth - 2 * margin;
                     if (canvas1.height > 20) {
@@ -1455,48 +1442,44 @@ async function exportPDFReport() {
                         
                         tempPlotContainer.html('');
                         drawRvTPlot(analysisResults, tempPlotContainer);
+                        await new Promise(resolve => setTimeout(resolve, 300));
                         const canvas2 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
                         if (canvas2.height > 20) {
                             const imgHeight2 = (canvas2.height * imgWidth1) / canvas2.width;
-                            if (yPos + imgHeight2 > pageHeight - margin) {
-                                pdf.addPage(); 
-                                yPos = margin; 
-                            }
+                            if (yPos + imgHeight2 > pageHeight - margin) { pdf.addPage(); yPos = margin; }
                             pdf.addImage(canvas2.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight2);
                             yPos += imgHeight2 + 10;
                         }
                         
                         tempPlotContainer.html('');
                         drawConductivityVsTempPlot(analysisResults, tempPlotContainer);
+                        await new Promise(resolve => setTimeout(resolve, 300));
                         let canvas3 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
                         if (canvas3.height > 20) {
                             let imgHeight3 = (canvas3.height * imgWidth1) / canvas3.width;
-                            if (yPos + imgHeight3 > pageHeight - margin) {
-                                pdf.addPage(); 
-                                yPos = margin; 
-                            }
+                            if (yPos + imgHeight3 > pageHeight - margin) { pdf.addPage(); yPos = margin; }
                             pdf.addImage(canvas3.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight3);
                             yPos += imgHeight3 + 10;
                         }
 
                         tempPlotContainer.html('');
                         drawDiffusivityVsTempPlot(analysisResults, tempPlotContainer);
+                        await new Promise(resolve => setTimeout(resolve, 300));
                         let canvas4 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
                         if (canvas4.height > 20) {
                             let imgHeight4 = (canvas4.height * imgWidth1) / canvas4.width;
-                             if (yPos + imgHeight4 > pageHeight - margin) {
-                                pdf.addPage(); 
-                                yPos = margin; 
-                             }
+                             if (yPos + imgHeight4 > pageHeight - margin) { pdf.addPage(); yPos = margin; }
                             pdf.addImage(canvas4.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight4);
                         }
                     }
                 }
-                pdf.save(`3omega_report_v2.8_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+                pdf.save(`3omega_3D-Fit-report_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
             } catch (error) {
                 console.error("Error generating PDF:", error);
                 showError("An error occurred while generating the PDF. See browser console.");
             } finally {
+                // --- Reset cursor to normal ---
+                document.body.style.cursor = 'default';
                 selectedDatasetIndex = originalSelectedDatasetIndex;
                 if (document.getElementById('dataset-selector')) document.getElementById('dataset-selector').value = selectedDatasetIndex;
                 isShowingRTPlot = false;
@@ -1507,163 +1490,13 @@ async function exportPDFReport() {
             }
         }
 
-        function drawSummaryPlot(data, container) {
-            const plotMargin = { top: 40, right: 60, bottom: 50, left: 60 };
-            const width = 700 - plotMargin.left - plotMargin.right;
-            const height = 400 - plotMargin.top - plotMargin.bottom;
-
-            const svg = container.append("svg").attr("width", width + plotMargin.left + plotMargin.right).attr("height", height + plotMargin.top + plotMargin.bottom).append("g").attr("transform", `translate(${plotMargin.left},${plotMargin.top})`);
-            
-            const validData = data.filter(d => !isNaN(d.k) && !isNaN(d.alpha));
-            if (validData.length === 0) return;
-
-            const xScale = d3.scalePoint().domain(validData.map((d, i) => i + 1)).range([0, width]).padding(0.5);
-            
-            const [k_min, k_max] = d3.extent(validData, d => d.k);
-            const [alpha_min, alpha_max] = d3.extent(validData, d => d.alpha);
-
-            const y1Scale = d3.scaleLinear().domain([k_min * 0.9, k_max * 1.1]).range([height, 0]).nice();
-            const y2Scale = d3.scaleLinear().domain([alpha_min * 0.9, alpha_max * 1.1]).range([height, 0]).nice();
-
-            svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(xScale));
-            svg.append("g").call(d3.axisLeft(y1Scale).tickFormat(d3.format(".2s"))).style("color", "#1E40AF");
-            svg.append("g").attr("transform", `translate(${width},0)`).call(d3.axisRight(y2Scale).tickFormat(d3.format(".2s"))).style("color", "#B45309");
-
-            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", height + 40).text("Dataset Index");
-            svg.append("text").attr("text-anchor", "middle").attr("transform", "rotate(-90)").attr("y", -plotMargin.left + 20).attr("x", -height / 2).text("Thermal Conductivity (k) [W/mK]").style("fill", "#1E40AF");
-            svg.append("text").attr("text-anchor", "middle").attr("transform", "rotate(90)").attr("y", -width - plotMargin.right + 20).attr("x", height / 2).text("Thermal Diffusivity (α) [mm²/s]").style("fill", "#B45309");
-            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", -15).text("Summary of Results").style("font-size", "16px").style("font-weight", "bold");
-            
-            const capWidth = 4;
-            const errK = svg.selectAll(".err-k").data(validData).enter().append("g").style("stroke", "#1E40AF");
-            errK.append("line").attr("x1", (d, i) => xScale(i + 1)).attr("x2", (d, i) => xScale(i + 1)).attr("y1", d => y1Scale(d.k - d.esd_k)).attr("y2", d => y1Scale(d.k + d.esd_k));
-            errK.append("line").attr("x1", (d, i) => xScale(i + 1) - capWidth).attr("x2", (d, i) => xScale(i + 1) + capWidth).attr("y1", d => y1Scale(d.k + d.esd_k)).attr("y2", d => y1Scale(d.k + d.esd_k));
-            errK.append("line").attr("x1", (d, i) => xScale(i + 1) - capWidth).attr("x2", (d, i) => xScale(i + 1) + capWidth).attr("y1", d => y1Scale(d.k - d.esd_k)).attr("y2", d => y1Scale(d.k - d.esd_k));
-
-            const errAlpha = svg.selectAll(".err-alpha").data(validData).enter().append("g").style("stroke", "#B45309");
-            errAlpha.append("line").attr("x1", (d, i) => xScale(i + 1)).attr("x2", (d, i) => xScale(i + 1)).attr("y1", d => y2Scale(d.alpha - d.esd_alpha)).attr("y2", d => y2Scale(d.alpha + d.esd_alpha));
-            errAlpha.append("line").attr("x1", (d, i) => xScale(i + 1) - capWidth).attr("x2", (d, i) => xScale(i + 1) + capWidth).attr("y1", d => y2Scale(d.alpha + d.esd_alpha)).attr("y2", d => y2Scale(d.alpha + d.esd_alpha));
-            errAlpha.append("line").attr("x1", (d, i) => xScale(i + 1) - capWidth).attr("x2", (d, i) => xScale(i + 1) + capWidth).attr("y1", d => y2Scale(d.alpha - d.esd_alpha)).attr("y2", d => y2Scale(d.alpha - d.esd_alpha));
-
-            svg.selectAll(".dot-k").data(validData).enter().append("circle").attr("cx", (d, i) => xScale(i + 1)).attr("cy", d => y1Scale(d.k)).attr("r", 5).style("fill", "#1E40AF");
-            svg.selectAll(".dot-alpha").data(validData).enter().append("circle").attr("cx", (d, i) => xScale(i + 1)).attr("cy", d => y2Scale(d.alpha)).attr("r", 5).style("fill", "#B45309");
-        }
-
-        function drawRvTPlot(data, container) {
-            const plotData = data.map(d => ({ x: d.avg_temp, y: d.R0, sigma: d.esd_R0 })).filter(d => d.x > 0 && !isNaN(d.y));
-            if (plotData.length < 2) return;
-
-            const plotMargin = { top: 40, right: 40, bottom: 50, left: 60 };
-            const width = 700 - plotMargin.left - plotMargin.right, height = 400 - plotMargin.top - plotMargin.bottom;
-            const svg = container.append("svg").attr("width", width + plotMargin.left + plotMargin.right).attr("height", height + plotMargin.top + plotMargin.bottom).append("g").attr("transform", `translate(${plotMargin.left},${plotMargin.top})`);
-            
-            const [y_min, y_max] = d3.extent(plotData, d => d.y);
-            
-            const xScale = d3.scaleLinear().domain(d3.extent(plotData, d => d.x)).range([0, width]).nice();
-            const yScale = d3.scaleLinear().domain([y_min * 0.99, y_max * 1.01]).range([height, 0]).nice();
-            
-            svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(xScale));
-            svg.append("g").call(d3.axisLeft(yScale));
-
-            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", height + 40).text("Temperature (K)");
-            svg.append("text").attr("text-anchor", "middle").attr("transform", "rotate(-90)").attr("y", -plotMargin.left + 20).attr("x", -height / 2).text("Resistance (R₀) [Ω]");
-            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", -15).text("Resistance vs. Temperature").style("font-size", "16px").style("font-weight", "bold");
-
-            const capWidth = 3;
-            const errRY = svg.selectAll(".err-r-y").data(plotData).enter().append("g").style("stroke", "gray");
-            errRY.append("line").attr("x1", d => xScale(d.x)).attr("x2", d => xScale(d.x)).attr("y1", d => yScale(d.y - d.sigma)).attr("y2", d => yScale(d.y + d.sigma));
-            errRY.append("line").attr("x1", d => xScale(d.x) - capWidth).attr("x2", d => xScale(d.x) + capWidth).attr("y1", d => yScale(d.y + d.sigma)).attr("y2", d => yScale(d.y + d.sigma));
-            errRY.append("line").attr("x1", d => xScale(d.x) - capWidth).attr("x2", d => xScale(d.x) + capWidth).attr("y1", d => yScale(d.y - d.sigma)).attr("y2", d => yScale(d.y - d.sigma));
-            
-            svg.selectAll(".dot-r").data(plotData).enter().append("circle").attr("cx", d => xScale(d.x)).attr("cy", d => yScale(d.y)).attr("r", 4).style("fill", "#059669");
-
-            const fit_coeffs = parsedFileContent.rt_fit_coefficients;
-            if (fit_coeffs && fit_coeffs.success) {
-                const { c0, c1, c2 } = fit_coeffs;
-                const curve_points = d3.range(xScale.domain()[0], xScale.domain()[1], (xScale.domain()[1] - xScale.domain()[0]) / 100);
-                
-                const line = d3.line()
-                    .x(d => xScale(d))
-                    .y(d => yScale(c2 * d * d + c1 * d + c0));
-
-                svg.append("path")
-                    .datum(curve_points)
-                    .attr("fill", "none")
-                    .attr("stroke", "#d97706")
-                    .attr("stroke-width", 2)
-                    .attr("stroke-dasharray", "5,5")
-                    .attr("d", line);
-
-                const fitText = `Fit: R(T) = ${c2.toExponential(2)}T² + ${c1.toExponential(2)}T + ${c0.toExponential(2)}`;
-                svg.append("text").attr("x", width).attr("y", 0).attr("text-anchor", "end").style("font-size", "12px").text(fitText);
-            }
-        }
-
-        function drawConductivityVsTempPlot(data, container) {
-            const plotData = data.filter(d => d.avg_temp > 0 && !isNaN(d.k));
-            if (plotData.length < 2) return;
-            const plotMargin = { top: 40, right: 40, bottom: 50, left: 60 };
-            const width = 700 - plotMargin.left - plotMargin.right, height = 400 - plotMargin.top - plotMargin.bottom;
-            const svg = container.append("svg").attr("width", width + plotMargin.left + plotMargin.right).attr("height", height + plotMargin.top + plotMargin.bottom).append("g").attr("transform", `translate(${plotMargin.left},${plotMargin.top})`);
-            
-            const [k_min, k_max] = d3.extent(plotData, d => d.k);
-
-            const xScale = d3.scaleLinear().domain(d3.extent(plotData, d => d.avg_temp)).range([0, width]).nice();
-            const yScale = d3.scaleLinear().domain([k_min * 0.9, k_max * 1.1]).range([height, 0]).nice();
-
-            svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(xScale));
-            svg.append("g").call(d3.axisLeft(yScale).tickFormat(d3.format(".2s"))).style("color", "#1E40AF");
-
-            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", height + 40).text("Temperature (K)");
-            svg.append("text").attr("text-anchor", "middle").attr("transform", "rotate(-90)").attr("y", -plotMargin.left + 20).attr("x", -height / 2).text("Thermal Conductivity (k) [W/mK]").style("fill", "#1E40AF");
-            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", -15).text("Thermal Conductivity vs. Temperature").style("font-size", "16px").style("font-weight", "bold");
-
-            const capWidth = 4;
-            const errK = svg.selectAll(".err-k-t").data(plotData).enter().append("g").style("stroke", "#1E40AF");
-            errK.append("line").attr("x1", d => xScale(d.avg_temp)).attr("x2", d => xScale(d.avg_temp)).attr("y1", d => yScale(d.k - d.esd_k)).attr("y2", d => yScale(d.k + d.esd_k));
-            errK.append("line").attr("x1", d => xScale(d.avg_temp) - capWidth).attr("x2", d => xScale(d.avg_temp) + capWidth).attr("y1", d => yScale(d.k + d.esd_k)).attr("y2", d => yScale(d.k + d.esd_k));
-            errK.append("line").attr("x1", d => xScale(d.avg_temp) - capWidth).attr("x2", d => xScale(d.avg_temp) + capWidth).attr("y1", d => yScale(d.k - d.esd_k)).attr("y2", d => yScale(d.k - d.esd_k));
-            
-            svg.selectAll(".dot-k-t").data(plotData).enter().append("circle").attr("cx", d => xScale(d.avg_temp)).attr("cy", d => yScale(d.k)).attr("r", 5).style("fill", "#1E40AF");
-        }
-
-        function drawDiffusivityVsTempPlot(data, container) {
-            const plotData = data.filter(d => d.avg_temp > 0 && !isNaN(d.alpha));
-            if (plotData.length < 2) return;
-            const plotMargin = { top: 40, right: 40, bottom: 50, left: 60 };
-            const width = 700 - plotMargin.left - plotMargin.right, height = 400 - plotMargin.top - plotMargin.bottom;
-            const svg = container.append("svg").attr("width", width + plotMargin.left + plotMargin.right).attr("height", height + plotMargin.top + plotMargin.bottom).append("g").attr("transform", `translate(${plotMargin.left},${plotMargin.top})`);
-            
-            const [alpha_min, alpha_max] = d3.extent(plotData, d => d.alpha);
-
-            const xScale = d3.scaleLinear().domain(d3.extent(plotData, d => d.avg_temp)).range([0, width]).nice();
-            const yScale = d3.scaleLinear().domain([alpha_min * 0.9, alpha_max * 1.1]).range([height, 0]).nice();
-
-            svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(xScale));
-            svg.append("g").call(d3.axisLeft(yScale).tickFormat(d3.format(".2s"))).style("color", "#B45309");
-
-            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", height + 40).text("Temperature (K)");
-            svg.append("text").attr("text-anchor", "middle").attr("transform", "rotate(-90)").attr("y", -plotMargin.left + 20).attr("x", -height / 2).text("Thermal Diffusivity (α) [mm²/s]").style("fill", "#B45309");
-            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", -15).text("Thermal Diffusivity vs. Temperature").style("font-size", "16px").style("font-weight", "bold");
-
-            const capWidth = 4;
-            const errAlpha = svg.selectAll(".err-alpha-t").data(plotData).enter().append("g").style("stroke", "#B45309");
-            errAlpha.append("line").attr("x1", d => xScale(d.avg_temp)).attr("x2", d => xScale(d.avg_temp)).attr("y1", d => yScale(d.alpha - d.esd_alpha)).attr("y2", d => yScale(d.alpha + d.esd_alpha));
-            errAlpha.append("line").attr("x1", d => xScale(d.avg_temp) - capWidth).attr("x2", d => xScale(d.avg_temp) + capWidth).attr("y1", d => yScale(d.alpha + d.esd_alpha)).attr("y2", d => yScale(d.alpha + d.esd_alpha));
-            errAlpha.append("line").attr("x1", d => xScale(d.avg_temp) - capWidth).attr("x2", d => xScale(d.avg_temp) + capWidth).attr("y1", d => yScale(d.alpha - d.esd_alpha)).attr("y2", d => yScale(d.alpha - d.esd_alpha));
-
-            svg.selectAll(".dot-alpha-t").data(plotData).enter().append("circle").attr("cx", d => xScale(d.avg_temp)).attr("cy", d => yScale(d.alpha)).attr("r", 5).style("fill", "#B45309");
-        }
-
-
-        // --- Resize
         const resizer = document.getElementById('drag-handle');
         const leftPanel = document.getElementById('controls-panel');
         let isResizing = false;
         resizer.addEventListener('mousedown', e => { e.preventDefault(); isResizing = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; window.addEventListener('mousemove', handleMouseMove); window.addEventListener('mouseup', stopResize); });
-        function handleMouseMove(e) { if (!isResizing) return; const newLeftWidth = e.clientX - resizer.parentElement.getBoundingClientRect().left; if (newLeftWidth > 350 && newLeftWidth < resizer.parentElement.clientWidth - 400) { leftPanel.style.width = `${newLeftWidth}px`; updateVisualization(); } }
+        function handleMouseMove(e) { if (!isResizing) return; const newLeftWidth = e.clientX - resizer.parentElement.getBoundingClientRect().left; if (newLeftWidth > 350 && newLeftWidth < resizer.parentElement.clientWidth - 400) { leftPanel.style.width = `${newLeftWidth}px`; try{Plotly.relayout(plotContainer, {autosize: true});}catch(e){} } }
         function stopResize() { isResizing = false; document.body.style.cursor = 'default'; document.body.style.userSelect = 'auto'; window.removeEventListener('mousemove', handleMouseMove); window.removeEventListener('mouseup', stopResize); }
-        new ResizeObserver(() => { if (analysisResults.length > 0) { updateVisualization(); } }).observe(plotContainer.node());
+        new ResizeObserver(() => { if (analysisResults.length > 0) { try{Plotly.relayout(plotContainer, {autosize: true});}catch(e){} } }).observe(plotContainer);
     });
 </script>
 </body>
