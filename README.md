@@ -81,15 +81,13 @@ Once the fit provides robust values for $q_1$ and $q_2$ (and their uncertainties
     $$\alpha_{TCR} = \frac{1}{R(T)}\frac{dR}{dT} = \frac{2C_2T + C_1}{C_2T^2 + C_1T + C_0}$$
 
 3.  **Thermal Conductivity (k)**: The thermal conductivity is calculated by rearranging the equation for $q_1$:
-    $$
-    k = \frac{R(T)^2 \alpha_{TCR}}{4 \pi L q_1}
-    $$
+
+    $$k = \frac{R(T)^2 \alpha_{TCR}}{4 \pi L q_1}$$
     The uncertainty, $esd_k$, is propagated from the uncertainties in $R(T)$, $L$, and $q_1$.
 
-4.  **Thermal Diffusivity ($\alpha_{diff}$)**: The thermal diffusivity is calculated by rearranging the equation involving $q_2/q_1$:
-    $$
-    \alpha_{diff} = \frac{b^2 e^\gamma}{8} \exp\left(\frac{q_2}{q_1}\right)
-    $$
+5.  **Thermal Diffusivity ($\alpha_{diff}$)**: The thermal diffusivity is calculated by rearranging the equation involving $q_2/q_1$:
+
+    $$\alpha_{diff} = \frac{b^2 e^\gamma}{8} \exp\left(\frac{q_2}{q_1}\right)$$
     The uncertainty, $esd_{\alpha}$, is propagated from the uncertainties in $b$, $q_1$, and $q_2$.
 
 ## 4. Visualization and Reporting
