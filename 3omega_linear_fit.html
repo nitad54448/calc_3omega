@@ -1,0 +1,1670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3-Omega Linear Fit</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body { font-family: system-ui, sans-serif; margin: 0; background-color: #f0f0f0; color: #333; display: flex; height: 100vh; overflow: hidden; }
+        #app-container {
+            display: flex;
+            flex-direction: column;
+            background-color: #ffffff;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            overflow: hidden;
+            width: 98%;
+            max-width: 1800px;
+            height: 100vh;
+            margin: 0 auto;
+        }
+        #main-content {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+        }
+        #controls-panel {
+            width: 350px;
+            min-width: 200px;
+            max-width: 600px;
+            flex-shrink: 0;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-right: 1px solid #e0e0e0;
+            overflow-y: auto;
+        }
+        #drag-handle { width: 6px; cursor: col-resize; background-color: #e0e0e0; flex-shrink: 0; transition: background-color 0.2s; }
+        #drag-handle:hover { background-color: #007bff; }
+        #controls-panel h1 { font-size: 1.5em; margin-top: 0; margin-bottom: 20px; color: #004494; }
+        #controls-panel h2 { font-size: 1.2em; margin-top: 25px; margin-bottom: 15px; color: #004494; border-bottom: 2px solid #e0e0e0; padding-bottom: 5px;}
+        .control-group { margin-bottom: 18px; }
+        .control-group label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9em; }
+        .control-group input[type="number"], .control-group select {
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+            color: #111827;
+            background-color: white;
+        }
+        .control-row { display: flex; align-items: center; gap: 10px; }
+        .control-row input[type="range"] { flex-grow: 1; }
+        .control-row input[type="number"] { width: 100px; }
+
+        .control-row-with-error {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .control-row-with-error input:first-child {
+            flex-grow: 1;
+        }
+        .control-row-with-error input:last-of-type {
+            width: 80px;
+        }
+        .control-row-with-error span {
+            font-size: 0.9em;
+            color: #555;
+        }
+
+        .file-upload-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: white;
+            padding: 5px;
+            overflow: hidden;
+        }
+        .file-input-hidden {
+            display: none;
+        }
+        .file-input-label {
+            background-color: #e0e0e0;
+            color: #333;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background-color 0.2s;
+        }
+        .file-input-label:hover {
+            background-color: #d0d0d0;
+        }
+        .file-name-display {
+            padding-left: 10px;
+            font-size: 0.8em;
+            color: #555;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+
+        #visualization-area { flex-grow: 1; position: relative; background-color: #ffffff; min-width: 0; display: flex; flex-direction: column; padding: 1.5rem; }
+        #plot-container { flex-grow: 1; width: 100%; height: 100%; }
+        #plot-container svg { width: 100%; height: 100%; }
+
+        .results-card {
+            background-color: #e9f5ff;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin-top: 15px;
+            font-size: 0.9em;
+            border-radius: 4px;
+        }
+        .results-card h3 { margin-top: 0; color: #004494; }
+        .results-card p { margin: 5px 0; }
+
+        #dataset-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        #dataset-selector {
+            flex-grow: 1;
+        }
+        #delete-dataset-btn {
+            padding: 8px;
+            background-color: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        #delete-dataset-btn:hover {
+            background-color: #dc2626;
+        }
+        #save-report-btn {
+            width: 100%;
+            padding: 10px;
+            margin-top: 20px;
+            background-color: #16a34a;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        #save-report-btn:hover {
+            background-color: #15803d;
+        }
+        #save-report-btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+
+        footer {
+            padding: 8px 20px;
+            background-color: #f9f9f9;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8em;
+            color: #666;
+            flex-shrink: 0;
+        }
+
+        /* Plot style */
+        .axis path, .axis .tick line { stroke: #888; }
+        .axis .tick text { fill: #555; font-size: 14px; }
+        .line { fill: none; }
+        .dot { stroke-width: 1.5px; }
+        .axis-label { font-size: 16px; fill: #333; font-weight: 500; }
+        .legend { font-size: 14px; }
+        .fit-line-in-phase { stroke: #1E40AF; stroke-dasharray: 5, 5; stroke-width: 2px; }
+        .fit-line-out-of-phase { stroke: #B45309; stroke-dasharray: 5, 5; stroke-width: 2px; }
+        .fit-marker { stroke: red; stroke-width: 1.5px; stroke-dasharray: 4, 4; }
+        .axis-label.y-label-left { fill: #1E40AF; }
+        .axis-label.y-label-right { fill: #B45309; }
+        .axis.y-axis-left .tick text { fill: #1E40AF; }
+        .axis.y-axis-left path.domain { stroke: #1E40AF; }
+        .axis.y-axis-right .tick text { fill: #B45309; }
+        .axis.y-axis-right path.domain { stroke: #B45309; }
+        .rt-fit-line { stroke: #d97706; stroke-width: 2.5px; stroke-dasharray: 6, 6; }
+        .rt-data-point { fill: #059669; }
+        .rt-error-bar { stroke: #555; stroke-width: 1px; }
+
+        /* container caché pour les graphs PDF extra */
+        #pdf-plot-temp-container {
+            position: absolute;
+            left: -9999px;
+            top: -9999px;
+            width: 800px;
+            height: 1200px;
+            background-color: white;
+            z-index: -100;
+        }
+        
+        #error-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .control-group-checkbox {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 18px;
+        }
+        .control-group-checkbox label {
+            margin-bottom: 0; /* Override default block margin */
+        }
+        
+        /* New styles for Global toggle */
+        .label-with-global {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .label-with-global > label { /* Target direct child label */
+            margin-bottom: 0; 
+        }
+        .global-toggle {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .global-toggle label {
+            font-weight: normal;
+            font-size: 0.85em;
+            color: #555;
+            cursor: pointer;
+        }
+        .global-toggle input[type="checkbox"] {
+            cursor: pointer;
+            width: 16px;
+            height: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <div id="main-content">
+            <div id="controls-panel">
+                <h1>3-Omega Linear Fit</h1>
+
+               <div class="control-group">
+                    <label>Upload Data File</label>
+                    <div class="file-upload-container">
+                        <input type="file" id="file-upload" class="file-input-hidden">
+                        <label for="file-upload" class="file-input-label">
+                            <span>Select file</span>
+                        </label>
+                        <span id="file-name-display" class="file-name-display">No datafile</span>
+                    </div>
+                </div>
+
+                <div class="control-group-checkbox">
+                    <label for="phase-shift-180">Apply 180° Phase Correction</label>
+                    <input type="checkbox" id="phase-shift-180" style="width: 20px; height: 20px; cursor: pointer;">
+                </div>
+
+
+                <h2>Experimental Parameters</h2>
+                <div class="control-group">
+                    <label for="wire-length">Voltage Probe Distance (L) [mm]</label>
+                    <div class="control-row-with-error">
+                        <input type="number" id="wire-length" value="4">
+                        <input type="number" id="esd-wire-length-ppm" value="5000" title="Uncertainty in ppm">
+                        <span>ppm</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="wire-width">Wire Width (2b) [mm]</label>
+                    <div class="control-row-with-error">
+                        <input type="number" id="wire-width" value="0.1">
+                        <input type="number" id="esd-wire-width-ppm" value="5000" title="Uncertainty in ppm">
+                        <span>ppm</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="thickness-substrate">Substrate Thickness (dₛ) [mm]</label>
+                    <input type="number" id="thickness-substrate" value="3">
+                </div>
+
+                <h2>R(T) = C₂T² + C₁T + C₀</h2>
+                <div class="control-group">
+                    <label for="tcr-c0">C0 (Ohm)</label>
+                    <input type="number" id="tcr-c0" value="0" step="any">
+                </div>
+                <div class="control-group">
+                    <label for="tcr-c1">C1 (Ohm/K)</label>
+                    <input type="number" id="tcr-c1" value="0.0035" step="any">
+                </div>
+                <div class="control-group">
+                    <label for="tcr-c2">C2 (Ohm/K^2)</label>
+                    <input type="number" id="tcr-c2" value="0" step="any">
+                </div>
+
+                <div id="fitting-controls" class="hidden">
+                    <h2>Fitting Controls</h2>
+                    <div class="control-group">
+                        <label for="fit-method">Fit Method</label>
+                        <select id="fit-method">
+                            <option value="wls">Weighted Least Squares</option>
+                            <option value="robust" selected>Robust (Bisquare)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <div class="label-with-global">
+                            <label for="fit-fmin">Min Frequency (Hz)</label>
+                            <div class="global-toggle">
+                                <input type="checkbox" id="fit-fmin-global">
+                                <label for="fit-fmin-global">Global</label>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <input type="range" id="fit-fmin-slider">
+                            <input type="number" id="fit-fmin">
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <div class="label-with-global">
+                            <label for="fit-fmax">Max Frequency (Hz)</label>
+                             <div class="global-toggle">
+                                <input type="checkbox" id="fit-fmax-global">
+                                <label for="fit-fmax-global">Global</label>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <input type="range" id="fit-fmax-slider">
+                            <input type="number" id="fit-fmax">
+                        </div>
+                    </div>
+                    <div id="recommended-fit-range-container"></div>
+                </div>
+
+                <div id="results-container"></div>
+                <button id="save-report-btn" class="hidden">Save Report</button>
+            </div>
+            <div id="drag-handle"></div>
+            <div id="visualization-area">
+                <div id="plot-container"></div>
+            </div>
+        </div>
+        <footer>
+            <span>3-Omega_Linear_Fit v2.8, 10 August 2025</span>
+            <span>NitaD, Univ Paris-Saclay</span>
+        </footer>
+    </div>
+    <div id="pdf-plot-temp-container"></div>
+    <div id="error-container"></div>
+
+<script>
+    window.addEventListener('DOMContentLoaded', () => {
+        const { jsPDF } = window.jspdf;
+        let parsedFileContent = { datasets: [], jsonHeader: null };
+        let analysisResults = [];
+        let currentPlotData = {};
+        let selectedDatasetIndex = 0;
+        let isShowingRTPlot = false; // State to control which plot is visible
+
+        document.getElementById('file-upload').addEventListener('change', handleFileSelect, false);
+        
+        // --- Event Listeners ---
+        const globalParamIds = ['wire-length', 'esd-wire-length-ppm', 'wire-width', 'esd-wire-width-ppm', 'thickness-substrate', 'phase-shift-180'];
+        globalParamIds.forEach(id => {
+            document.getElementById(id)?.addEventListener('change', () => {
+                 if (parsedFileContent.datasets.length > 0) analyzeAndDisplay(true);
+            });
+        });
+        
+        const tcrCoeffIds = ['tcr-c0', 'tcr-c1', 'tcr-c2'];
+        tcrCoeffIds.forEach(id => {
+            document.getElementById(id)?.addEventListener('change', () => {
+                if (parsedFileContent.datasets.length > 0) {
+                    analyzeAndDisplay(true); // First, recalculate all derived values
+                    isShowingRTPlot = true;      // Set state to show the R(T) plot
+                    updateVisualization();     // Update the plot view
+                }
+            });
+        });
+
+        const localParamIds = ['fit-method'];
+        localParamIds.forEach(id => {
+            document.getElementById(id)?.addEventListener('change', () => {
+                 if (parsedFileContent.datasets.length > 0) analyzeAndDisplay(false);
+            });
+        });
+        document.getElementById('save-report-btn').addEventListener('click', exportPDFReport);
+
+        function showError(message, duration = 5000) {
+            const errorContainer = document.getElementById('error-container');
+            const errorDiv = document.createElement('div');
+            errorDiv.textContent = message;
+            errorDiv.style.backgroundColor = '#ef4444';
+            errorDiv.style.color = 'white';
+            errorDiv.style.padding = '10px 20px';
+            errorDiv.style.borderRadius = '5px';
+            errorDiv.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
+            errorDiv.style.opacity = '1';
+            errorDiv.style.transition = 'opacity 0.5s ease-out';
+            errorContainer.appendChild(errorDiv);
+            setTimeout(() => {
+                errorDiv.style.opacity = '0';
+                setTimeout(() => errorDiv.remove(), 500);
+            }, duration);
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            const fileNameDisplay = document.getElementById('file-name-display');
+
+            if (!file) {
+                fileNameDisplay.textContent = 'No file selected';
+                return;
+            }
+
+            fileNameDisplay.textContent = file.name;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const contents = e.target.result;
+                parsedFileContent = parseData(contents);
+                if (parsedFileContent.datasets.length > 0) {
+                    
+                    const tcr_data = parsedFileContent.datasets
+                        .map(ds => ({ x: ds.avg_temp, y: ds.R0, sigma: ds.esd_R0 }))
+                        .filter(d => !isNaN(d.x) && !isNaN(d.y) && d.x > 0);
+
+                    const uniqueTemps = new Set(tcr_data.map(d => d.x));
+                    if (tcr_data.length >= 2 && uniqueTemps.size >= 2) {
+                        const fit_coeffs = weightedPolynomialRegression2ndOrder(tcr_data);
+                        if (fit_coeffs.success) {
+                            parsedFileContent.rt_fit_coefficients = fit_coeffs;
+                            document.getElementById('tcr-c0').value = fit_coeffs.c0.toExponential(4);
+                            document.getElementById('tcr-c1').value = fit_coeffs.c1.toExponential(4);
+                            document.getElementById('tcr-c2').value = fit_coeffs.c2.toExponential(4);
+                        }
+                    }
+                    
+                    const allFreqs = parsedFileContent.datasets.flatMap(ds => ds.data.map(d => d.freq));
+                    const globalMinFreq = Math.max(0.01, Math.min(...allFreqs));
+                    const globalMaxFreq = Math.max(...allFreqs);
+                    
+                    analysisResults = parsedFileContent.datasets.map(dataset => {
+                        const processedData = processDataWithInternalFit(dataset.data);
+                        return { ...dataset, processedData, minFitFreq: globalMinFreq, maxFitFreq: globalMaxFreq };
+                    });
+
+                    selectedDatasetIndex = 0;
+                    isShowingRTPlot = false; // Default to dataset view on new file
+                    document.getElementById('fitting-controls').classList.remove('hidden');
+                    document.getElementById('save-report-btn').classList.remove('hidden');
+                    setupFittingSliders();
+                    analyzeAndDisplay(true);
+                } else {
+                    showError("Could not parse any valid datasets from the file.");
+                    document.getElementById('fitting-controls').classList.add('hidden');
+                    document.getElementById('save-report-btn').classList.add('hidden');
+                    document.getElementById('results-container').innerHTML = '';
+                    clearPlot();
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = null;
+        }
+
+    function setupFittingSliders() {
+            const allFreqs = parsedFileContent.datasets.flatMap(ds => ds.data.map(d => d.freq));
+            const minFreq = Math.max(0.01, Math.min(...allFreqs));
+            const maxFreq = Math.max(...allFreqs);
+
+            const logMin = Math.log(minFreq);
+            const logMax = Math.log(maxFreq);
+
+            const fminSlider = document.getElementById('fit-fmin-slider');
+            const fminValue = document.getElementById('fit-fmin');
+            const fminGlobal = document.getElementById('fit-fmin-global');
+            const fmaxSlider = document.getElementById('fit-fmax-slider');
+            const fmaxValue = document.getElementById('fit-fmax');
+            const fmaxGlobal = document.getElementById('fit-fmax-global');
+
+            fminValue.min = minFreq.toFixed(2); fminValue.max = maxFreq.toFixed(2);
+            fmaxValue.min = minFreq.toFixed(2); fmaxValue.max = maxFreq.toFixed(2);
+            fminSlider.min = logMin; fminSlider.max = logMax;
+            fmaxSlider.min = logMin; fmaxSlider.max = logMax;
+
+            const step = (logMax - logMin) / 200;
+            fminSlider.step = step; fmaxSlider.step = step;
+            fminSlider.value = logMin; fminValue.value = minFreq.toFixed(2);
+            fmaxSlider.value = logMax; fmaxValue.value = maxFreq.toFixed(2);
+
+            const updateAnalysisAfterFreqChange = () => {
+                if (parsedFileContent.datasets.length === 0) return;
+                isShowingRTPlot = false;
+                const minFreqVal = parseFloat(fminValue.value);
+                const maxFreqVal = parseFloat(fmaxValue.value);
+
+                // --- MODIFICATION START ---
+                let analyzeAll = false;
+
+                // If a global toggle is checked, that value applies to all datasets.
+                if (fminGlobal.checked) {
+                    analysisResults.forEach(res => res.minFitFreq = minFreqVal);
+                    analyzeAll = true;
+                }
+                if (fmaxGlobal.checked) {
+                    analysisResults.forEach(res => res.maxFitFreq = maxFreqVal);
+                    analyzeAll = true;
+                }
+                
+                // Crucially, if a toggle is NOT checked, the value *still* needs to be
+                // applied to the currently selected dataset before analysis.
+                const currentResult = analysisResults[selectedDatasetIndex];
+                if (currentResult) {
+                    if (!fminGlobal.checked) {
+                        currentResult.minFitFreq = minFreqVal;
+                    }
+                    if (!fmaxGlobal.checked) {
+                        currentResult.maxFitFreq = maxFreqVal;
+                    }
+                }
+                // --- MODIFICATION END ---
+                
+                analyzeAndDisplay(analyzeAll);
+            };
+
+            fminSlider.oninput = () => {
+                const logVal = parseFloat(fminSlider.value);
+                fminValue.value = Math.exp(logVal).toFixed(2);
+                if (parseFloat(fmaxSlider.value) < logVal) {
+                    fmaxSlider.value = logVal;
+                    fmaxValue.value = Math.exp(logVal).toFixed(2);
+                }
+                updateAnalysisAfterFreqChange();
+            };
+            fmaxSlider.oninput = () => {
+                const logVal = parseFloat(fmaxSlider.value);
+                fmaxValue.value = Math.exp(logVal).toFixed(2);
+                if (logVal < parseFloat(fminSlider.value)) {
+                    fminSlider.value = logVal;
+                    fminValue.value = Math.exp(logVal).toFixed(2);
+                }
+                updateAnalysisAfterFreqChange();
+            };
+            fminValue.onchange = () => {
+                let val = parseFloat(fminValue.value);
+                if (isNaN(val) || val <= 0) val = 0.01;
+                if (val > maxFreq) val = maxFreq;
+                fminValue.value = val.toFixed(2);
+                fminSlider.value = Math.log(val);
+                updateAnalysisAfterFreqChange();
+            };
+            fmaxValue.onchange = () => {
+                let val = parseFloat(fmaxValue.value);
+                if (isNaN(val) || val < minFreq) val = minFreq;
+                if (val > maxFreq) val = maxFreq;
+                fmaxValue.value = val.toFixed(2);
+                fmaxSlider.value = Math.log(val);
+                updateAnalysisAfterFreqChange();
+            };
+            
+            fminGlobal.onchange = updateAnalysisAfterFreqChange;
+            fmaxGlobal.onchange = updateAnalysisAfterFreqChange;
+        }
+
+        function parseData(fileContent) {
+            const firstBrace = fileContent.indexOf('{');
+            const lastBrace = fileContent.lastIndexOf('}');
+            let startTime = null;
+            let jsonHeader = null;
+
+            if (firstBrace !== -1 && lastBrace !== -1) {
+                try {
+                    jsonHeader = JSON.parse(fileContent.substring(firstBrace, lastBrace + 1));
+                    if (jsonHeader["start time"]) startTime = new Date(jsonHeader["start time"]);
+                } catch (e) {
+                    console.error("Could not parse JSON header.", e);
+                    jsonHeader = null;
+                }
+            }
+
+            const datasets = [];
+            const blocks = fileContent.split('***');
+            blocks.forEach(block => {
+                if (!block.trim()) return;
+                const lines = block.split('\n');
+                const data = [];
+                let temperatures = [];
+                let isDataSection = false;
+                let R0 = NaN, esd_R0 = 0, firstTimeSec = NaN;
+
+                for (const line of lines) {
+                    const trimmedLine = line.trim();
+                    if (trimmedLine.startsWith('--- > R0 :')) {
+                        const r0_strings = trimmedLine.split(':')[1].trim().split(/\s+/);
+                        const r0_values = r0_strings.map(parseFloat).filter(v => !isNaN(v));
+                        if (r0_values.length > 0) {
+                            R0 = d3.mean(r0_values);
+                            const std_dev = d3.deviation(r0_values) || 0;
+                            esd_R0 = Math.max(std_dev, R0 * 100e-6);
+                        }
+                    }
+                    if (trimmedLine.startsWith('time /sec')) { isDataSection = true; continue; }
+                    if (trimmedLine.startsWith('--- > K and esd K')) { isDataSection = false; continue; }
+
+                    if (isDataSection) {
+                        const values = trimmedLine.split(/\s+/);
+                        if (values.length >= 11) {
+                            if (isNaN(firstTimeSec)) firstTimeSec = parseFloat(values[0]);
+                            const temp = parseFloat(values[1]);
+                            if (!isNaN(temp)) temperatures.push(temp);
+
+                            const freq = parseFloat(values[3]);
+                            const v3x = parseFloat(values[6]);
+                            const esdV3X = parseFloat(values[7]);
+                            const v3y = parseFloat(values[8]);
+                            const esdV3Y = parseFloat(values[9]);
+                            const isValid = parseFloat(values[10]) === 1;
+                            const current_peak_mA = parseFloat(values[2]);
+                            const current = (current_peak_mA * 1e-3) / Math.sqrt(2); // RMS current
+
+                            if (!isNaN(freq) && freq > 0 && !isNaN(v3x) && !isNaN(v3y) && !isNaN(current) && current > 0) {
+                                data.push({
+                                    freq, v3_in_phase: v3x, v3_out_of_phase: v3y,
+                                    esdV3X, esdV3Y, current,
+                                    ln_2omega: Math.log(2 * 2 * Math.PI * freq),
+                                    isValid
+                                });
+                            }
+                        }
+                    }
+                }
+                if (data.length > 0 && !isNaN(R0)) {
+                    let avg_temp = d3.mean(temperatures.filter(t => t > 0)) || NaN;
+                    let timestamp = (startTime && !isNaN(firstTimeSec)) ? new Date(startTime.getTime() + firstTimeSec * 1000) : new Date();
+                    datasets.push({ data, R0, esd_R0, timestamp, avg_temp });
+                }
+            });
+            return { datasets, jsonHeader };
+        }
+        
+        function linearRegressionThroughOrigin(points, xKey, yKey) {
+            if (points.length < 2) return { slope: 0, esd_slope: 0 };
+            let sum_xy = 0, sum_xx = 0;
+            points.forEach(p => {
+                if(!isNaN(p[xKey]) && !isNaN(p[yKey])) {
+                    sum_xy += p[xKey] * p[yKey];
+                    sum_xx += p[xKey] * p[xKey];
+                }
+            });
+            if (sum_xx === 0) return { slope: 0, esd_slope: 0 };
+            const slope = sum_xy / sum_xx;
+            let sum_sq_residuals = 0;
+            points.forEach(p => {
+                 if(!isNaN(p[xKey]) && !isNaN(p[yKey])) {
+                    sum_sq_residuals += Math.pow(p[yKey] - slope * p[xKey], 2);
+                 }
+            });
+            const dof = points.length - 1;
+            if (dof <= 0) return { slope: slope, esd_slope: 0 };
+            const std_err_regression = Math.sqrt(sum_sq_residuals / dof);
+            const esd_slope = std_err_regression / Math.sqrt(sum_xx);
+            return { slope, esd_slope };
+        }
+
+        function processDataWithInternalFit(rawData) {
+            const groupedByFreq = d3.group(rawData, d => d.freq);
+            const processedData = [];
+
+            for (const [freq, points] of groupedByFreq.entries()) {
+                const validPoints = points.filter(p => p.isValid);
+
+                if (validPoints.length === 0) {
+                    processedData.push({ freq, ln_2omega: points[0].ln_2omega, isValid: false, v3_in_phase_norm: NaN, esdV3X_norm: NaN, v3_out_of_phase_norm: NaN, esdV3Y_norm: NaN });
+                    continue;
+                }
+
+                const pointsWithI3 = validPoints.map(p => ({ ...p, i_cubed: Math.pow(p.current, 3) }));
+                const uniqueCurrents = new Set(validPoints.map(p => p.current));
+                
+                let fit_in_phase, fit_out_of_phase;
+
+                if (validPoints.length > 1 && uniqueCurrents.size > 1) {
+                    fit_in_phase = linearRegressionThroughOrigin(pointsWithI3, 'i_cubed', 'v3_in_phase');
+                    fit_out_of_phase = linearRegressionThroughOrigin(pointsWithI3, 'i_cubed', 'v3_out_of_phase');
+                } else if (validPoints.length > 1) {
+                    const i_cubed = pointsWithI3[0].i_cubed;
+                    const mean_v3x = d3.mean(pointsWithI3, p => p.v3_in_phase);
+                    const mean_v3y = d3.mean(pointsWithI3, p => p.v3_out_of_phase);
+                    
+                    const esd_v3x = Math.max( (d3.deviation(pointsWithI3, p => p.v3_in_phase) || 0) / Math.sqrt(points.length), d3.max(pointsWithI3, p => p.esdV3X) );
+                    const esd_v3y = Math.max( (d3.deviation(pointsWithI3, p => p.v3_out_of_phase) || 0) / Math.sqrt(points.length), d3.max(pointsWithI3, p => p.esdV3Y) );
+                    
+                    if (i_cubed > 0) {
+                        fit_in_phase = { slope: mean_v3x / i_cubed, esd_slope: esd_v3x / i_cubed };
+                        fit_out_of_phase = { slope: mean_v3y / i_cubed, esd_slope: esd_v3y / i_cubed };
+                    } else {
+                        fit_in_phase = { slope: NaN, esd_slope: NaN }; fit_out_of_phase = { slope: NaN, esd_slope: NaN };
+                    }
+                } else {
+                    const p = pointsWithI3[0];
+                    if (p.i_cubed > 0) {
+                       fit_in_phase = { slope: p.v3_in_phase / p.i_cubed, esd_slope: p.esdV3X / p.i_cubed };
+                       fit_out_of_phase = { slope: p.v3_out_of_phase / p.i_cubed, esd_slope: p.esdV3Y / p.i_cubed };
+                    } else {
+                       fit_in_phase = { slope: NaN, esd_slope: NaN }; fit_out_of_phase = { slope: NaN, esd_slope: NaN };
+                    }
+                }
+
+                processedData.push({
+                    freq: freq, ln_2omega: points[0].ln_2omega, isValid: true,
+                    v3_in_phase_norm: fit_in_phase.slope, esdV3X_norm: fit_in_phase.esd_slope,
+                    v3_out_of_phase_norm: fit_out_of_phase.slope, esdV3Y_norm: fit_out_of_phase.esd_slope,
+                });
+            }
+            return processedData.sort((a, b) => a.freq - b.freq);
+        }
+
+        function analyzeAndDisplay(analyzeAll = false) {
+            if (analysisResults.length === 0) return;
+            
+            const L = parseFloat(document.getElementById('wire-length').value) * 1e-3;
+            const esd_L_ppm = parseFloat(document.getElementById('esd-wire-length-ppm').value);
+            const rel_err_L = esd_L_ppm / 1e6;
+            const two_b = parseFloat(document.getElementById('wire-width').value) * 1e-3;
+            const esd_two_b_ppm = parseFloat(document.getElementById('esd-wire-width-ppm').value);
+            const rel_err_two_b = esd_two_b_ppm / 1e6;
+            const b = two_b / 2;
+            const C_min = 4;
+            const C_max = 5;
+            const d_s = parseFloat(document.getElementById('thickness-substrate').value) * 1e-3;
+            const fitMethod = document.getElementById('fit-method').value;
+            const applyPhaseCorrection = document.getElementById('phase-shift-180').checked;
+            const phaseFactor = applyPhaseCorrection ? -1 : 1;
+
+            const performAnalysisOnDataset = (result, fitRange) => {
+                const C0 = parseFloat(document.getElementById('tcr-c0').value);
+                const C1 = parseFloat(document.getElementById('tcr-c1').value);
+                const C2 = parseFloat(document.getElementById('tcr-c2').value);
+
+                let alpha_tcr = 0;
+                if (result.avg_temp > 0) {
+                    const temp = result.avg_temp;
+                    const R_at_T = C2 * temp * temp + C1 * temp + C0;
+                    const dR_dT = 2 * C2 * temp + C1;
+                    if (R_at_T > 0) {
+                        alpha_tcr = (1 / R_at_T) * dR_dT;
+                    }
+                }
+                result.local_tcr = alpha_tcr;
+                
+                const rel_err_tcr_sq = 0; 
+                
+                if (result.data && result.data.length > 0 && result.R0 > 0 && L > 0) {
+                    const maxCurrent = d3.max(result.data, d => d.current);
+                    if (maxCurrent > 0) {
+                        const maxPower = result.R0 * Math.pow(maxCurrent, 2);
+                        result.maxPowerPerLength = maxPower / L;
+                    } else {
+                        result.maxPowerPerLength = NaN;
+                    }
+                } else {
+                    result.maxPowerPerLength = NaN;
+                }
+
+                result.processedData.forEach(p => {
+                    if (p.v3_in_phase_norm_uncorrected === undefined) p.v3_in_phase_norm_uncorrected = p.v3_in_phase_norm;
+                    if (p.v3_out_of_phase_norm_uncorrected === undefined) p.v3_out_of_phase_norm_uncorrected = p.v3_out_of_phase_norm;
+                    p.v3_in_phase_norm = p.v3_in_phase_norm_uncorrected * phaseFactor;
+                    p.v3_out_of_phase_norm = p.v3_out_of_phase_norm_uncorrected * phaseFactor;
+                });
+
+                const dataForFit = result.processedData.filter(d => d.freq >= fitRange.min && d.freq <= fitRange.max && d.isValid && !isNaN(d.v3_in_phase_norm));
+                
+                let inPhaseFit, outOfPhaseFit;
+                if (fitMethod === 'robust') {
+                    inPhaseFit = robustLinearRegression(dataForFit, 'ln_2omega', 'v3_in_phase_norm', 'esdV3X_norm');
+                    outOfPhaseFit = robustLinearRegression(dataForFit, 'ln_2omega', 'v3_out_of_phase_norm', 'esdV3Y_norm');
+                } else {
+                    inPhaseFit = weightedLinearRegression(dataForFit, 'ln_2omega', 'v3_in_phase_norm', 'esdV3X_norm');
+                    outOfPhaseFit = weightedLinearRegression(dataForFit, 'ln_2omega', 'v3_out_of_phase_norm', 'esdV3Y_norm');
+                }
+
+                let k = NaN, esd_k = NaN;
+                if (inPhaseFit.slope !== 0) {
+                    k = -(Math.pow(result.R0, 2) * alpha_tcr) / (4 * Math.PI * L * inPhaseFit.slope);
+                    const rel_err_slope_sq = Math.pow(inPhaseFit.esd_slope / inPhaseFit.slope, 2);
+                    const rel_err_R0_sq = (result.R0 > 0 && result.esd_R0 > 0) ? 4 * Math.pow(result.esd_R0 / result.R0, 2) : 0;
+                    const rel_err_L_sq = Math.pow(rel_err_L, 2);
+                    esd_k = Math.abs(k) * Math.sqrt(rel_err_slope_sq + rel_err_R0_sq + rel_err_tcr_sq + rel_err_L_sq);
+                }
+                
+                let alpha_diffusivity_m2s = NaN, esd_alpha_diffusivity_m2s = NaN;
+                const S = inPhaseFit.slope, Ix = inPhaseFit.intercept;
+                const esd_S = inPhaseFit.esd_slope, esd_Ix = inPhaseFit.esd_intercept;
+                if (S !== 0) {
+                    const eulerGamma = 0.5772156;
+                    alpha_diffusivity_m2s = (b * b * Math.exp(eulerGamma) / 8) * Math.exp(-Ix / S);
+                    if (esd_S > 0 && esd_Ix > 0) {
+                        const rel_err_b_sq = Math.pow(rel_err_two_b, 2);
+                        const term_err_Ix_sq = Math.pow(esd_Ix / S, 2);
+                        const term_err_S_sq = Math.pow(Ix * esd_S / (S * S), 2);
+                        esd_alpha_diffusivity_m2s = Math.abs(alpha_diffusivity_m2s) * Math.sqrt(4 * rel_err_b_sq + term_err_Ix_sq + term_err_S_sq);
+                    }
+                }
+
+                result.k = k; result.esd_k = esd_k;
+                result.alpha = alpha_diffusivity_m2s * 1e6; result.esd_alpha = esd_alpha_diffusivity_m2s * 1e6;
+                
+                if (alpha_diffusivity_m2s > 0) {
+                    result.f_min_linearity = (d_s > 0) ? (C_min * C_min * alpha_diffusivity_m2s) / (4 * Math.PI * d_s * d_s) : NaN;
+                    result.f_max_linearity = (b > 0) ? alpha_diffusivity_m2s / (4 * Math.PI * Math.pow(C_max * b, 2)) : NaN;
+                } else {
+                    result.f_min_linearity = NaN; result.f_max_linearity = NaN;
+                }
+                
+                result.inPhaseFitParams = { slope: inPhaseFit.slope, intercept: inPhaseFit.intercept };
+                result.outOfPhaseFitParams = { slope: outOfPhaseFit.slope, intercept: outOfPhaseFit.intercept };
+                result.fitData = dataForFit;
+            };
+
+            if (analyzeAll) {
+                analysisResults.forEach(result => {
+                    performAnalysisOnDataset(result, { min: result.minFitFreq, max: result.maxFitFreq });
+                });
+            } else {
+                const result = analysisResults[selectedDatasetIndex];
+                if (result) {
+                    const minFitFreq = parseFloat(document.getElementById('fit-fmin').value);
+                    const maxFitFreq = parseFloat(document.getElementById('fit-fmax').value);
+                    result.minFitFreq = minFitFreq;
+                    result.maxFitFreq = maxFitFreq;
+                    performAnalysisOnDataset(result, { min: minFitFreq, max: maxFitFreq });
+                }
+            }
+            
+            const avg_alpha_m2s = d3.mean(analysisResults, d => d.alpha / 1e6);
+            if (avg_alpha_m2s > 0) {
+                parsedFileContent.global_f_min_linearity = (d_s > 0) ? (C_min * C_min * avg_alpha_m2s) / (4 * Math.PI * d_s * d_s) : NaN;
+                parsedFileContent.global_f_max_linearity = (b > 0) ? avg_alpha_m2s / (4 * Math.PI * Math.pow(C_max * b, 2)) : NaN;
+            }
+
+            renderResultsUI();
+            updateVisualization();
+        }
+
+        function weightedPolynomialRegression2ndOrder(data) {
+            const pointsToFit = data.filter(d => d.sigma > 0 && !isNaN(d.y));
+            const n = pointsToFit.length;
+
+            if (n < 2) return { success: false, c0: 0, c1: 0, c2: 0 };
+            if (n < 3) {
+                const fit = weightedLinearRegression(pointsToFit, 'x', 'y', 'sigma');
+                return { success: true, c0: fit.intercept, c1: fit.slope, c2: 0 };
+            }
+
+            let S_w = 0, S_wx = 0, S_wy = 0, S_wx2 = 0, S_wxy = 0, S_wx3 = 0, S_wx2y = 0, S_wx4 = 0;
+
+            for (const p of pointsToFit) {
+                const w = 1 / (p.sigma * p.sigma);
+                const wx = w * p.x;
+                const wy = w * p.y;
+                const wx2 = wx * p.x;
+                S_w += w; S_wx += wx; S_wy += wy; S_wx2 += wx2;
+                S_wxy += wx * p.y; S_wx3 += wx2 * p.x;
+                S_wx2y += wx2 * p.y; S_wx4 += wx2 * p.x * p.x;
+            }
+            
+            const A = [ [S_w, S_wx, S_wx2], [S_wx, S_wx2, S_wx3], [S_wx2, S_wx3, S_wx4] ];
+            const B = [S_wy, S_wxy, S_wx2y];
+            const detA = A[0][0]*(A[1][1]*A[2][2] - A[1][2]*A[2][1]) - A[0][1]*(A[1][0]*A[2][2] - A[1][2]*A[2][0]) + A[0][2]*(A[1][0]*A[2][1] - A[1][1]*A[2][0]);
+
+            if (Math.abs(detA) < 1e-12) return { success: false, c0: 0, c1: 0, c2: 0 };
+
+            const detA0 = B[0]*(A[1][1]*A[2][2] - A[1][2]*A[2][1]) - A[0][1]*(B[1]*A[2][2] - A[1][2]*B[2]) + A[0][2]*(B[1]*A[2][1] - A[1][1]*B[2]);
+            const detA1 = A[0][0]*(B[1]*A[2][2] - A[1][2]*B[2]) - B[0]*(A[1][0]*A[2][2] - A[1][2]*A[2][0]) + A[0][2]*(A[1][0]*B[2] - B[1]*A[2][0]);
+            const detA2 = A[0][0]*(A[1][1]*B[2] - B[1]*A[2][1]) - A[0][1]*(A[1][0]*B[2] - B[1]*A[2][0]) + B[0]*(A[1][0]*A[2][1] - A[1][1]*A[2][0]);
+
+            return { success: true, c0: detA0 / detA, c1: detA1 / detA, c2: detA2 / detA };
+        }
+
+        function weightedLinearRegression(data, xKey, yKey, sigmaKey) {
+            const pointsToFit = data.filter(d => d[sigmaKey] > 0 && !isNaN(d[yKey]));
+            if (pointsToFit.length < 2) return { slope: 0, intercept: 0, esd_slope: 0, esd_intercept: 0 };
+
+            let sum_w = 0, sum_wx = 0, sum_wy = 0, sum_wxy = 0, sum_wxx = 0;
+            for (const d of pointsToFit) {
+                const w = 1 / Math.pow(d[sigmaKey], 2);
+                sum_w += w; sum_wx += w * d[xKey]; sum_wy += w * d[yKey];
+                sum_wxy += w * d[xKey] * d[yKey]; sum_wxx += w * d[xKey] * d[xKey];
+            }
+            const delta = sum_w * sum_wxx - sum_wx * sum_wx;
+            if (delta === 0) return { slope: 0, intercept: 0, esd_slope: 0, esd_intercept: 0 };
+            const slope = (sum_w * sum_wxy - sum_wx * sum_wy) / delta;
+            const intercept = (sum_wxx * sum_wy - sum_wx * sum_wxy) / delta;
+            return { slope, intercept, esd_slope: Math.sqrt(sum_w / delta), esd_intercept: Math.sqrt(sum_wxx / delta) };
+        }
+
+        function robustLinearRegression(data, xKey, yKey, sigmaKey) {
+            let pointsToFit = data.filter(d => d[sigmaKey] > 0 && !isNaN(d[yKey]));
+            if (pointsToFit.length < 2) return { slope: 0, intercept: 0, esd_slope: 0, esd_intercept: 0 };
+
+            const MAX_ITERATIONS = 25; const TOLERANCE = 1e-6;
+            const initialFit = weightedLinearRegression(pointsToFit, xKey, yKey, sigmaKey);
+            let { slope, intercept, esd_slope, esd_intercept } = initialFit;
+            
+            pointsToFit.forEach(d => { d.robustWeight = 1 / Math.pow(d[sigmaKey], 2); });
+
+            for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
+                const residuals = pointsToFit.map(d => d[yKey] - (slope * d[xKey] + intercept));
+                const mad = d3.median(residuals.map(r => Math.abs(r - d3.median(residuals))));
+                if (mad === 0) break;
+
+                const c = 4.685, S = mad;
+                pointsToFit.forEach((d, i) => {
+                    const u = Math.abs(residuals[i] / (c * S));
+                    d.robustWeight = (u < 1) ? Math.pow(1 - u * u, 2) / Math.pow(d[sigmaKey], 2) : 0;
+                });
+
+                let sum_w = 0, sum_wx = 0, sum_wy = 0, sum_wxy = 0, sum_wxx = 0;
+                pointsToFit.forEach(d => {
+                    const w = d.robustWeight;
+                    sum_w += w; sum_wx += w * d[xKey]; sum_wy += w * d[yKey];
+                    sum_wxy += w * d[xKey] * d[yKey]; sum_wxx += w * d[xKey] * d[xKey];
+                });
+
+                const delta = sum_w * sum_wxx - sum_wx * sum_wx;
+                if (delta === 0) break; 
+                const newSlope = (sum_w * sum_wxy - sum_wx * sum_wy) / delta;
+                const newIntercept = (sum_wxx * sum_wy - sum_wx * sum_wxy) / delta;
+
+                if (Math.abs(newSlope - slope) < TOLERANCE && Math.abs(newIntercept - intercept) < TOLERANCE) {
+                    slope = newSlope; intercept = newIntercept; break;
+                }
+                slope = newSlope; intercept = newIntercept;
+            }
+
+            let final_sum_w = 0, final_sum_wxx = 0, final_sum_wx = 0;
+            pointsToFit.forEach(d => {
+                const w = d.robustWeight || 0;
+                final_sum_w += w; final_sum_wxx += w * d[xKey] * d[xKey]; final_sum_wx += w * d[xKey];
+            });
+
+            const final_delta = final_sum_w * final_sum_wxx - final_sum_wx * final_sum_wx;
+            if (final_delta > 0) {
+                esd_slope = Math.sqrt(final_sum_w / final_delta);
+                esd_intercept = Math.sqrt(final_sum_wxx / final_delta);
+            }
+            return { slope, intercept, esd_slope, esd_intercept };
+        }
+
+        function formatTimestamp(date) {
+            if (!(date instanceof Date) || isNaN(date)) return "Invalid Date";
+            const YYYY = date.getFullYear();
+            const MM = String(date.getMonth() + 1).padStart(2, '0');
+            const DD = String(date.getDate()).padStart(2, '0');
+            const hh = String(date.getHours()).padStart(2, '0');
+            const mm = String(date.getMinutes()).padStart(2, '0');
+            const ss = String(date.getSeconds()).padStart(2, '0');
+            return `${YYYY}-${MM}-${DD} ${hh}:${mm}:${ss}`;
+        }
+
+        function updateFittingUI() {
+            if (!analysisResults[selectedDatasetIndex]) return;
+            const { minFitFreq, maxFitFreq } = analysisResults[selectedDatasetIndex];
+            document.getElementById('fit-fmin').value = minFitFreq.toFixed(2);
+            document.getElementById('fit-fmax').value = maxFitFreq.toFixed(2);
+            document.getElementById('fit-fmin-slider').value = Math.log(minFitFreq);
+            document.getElementById('fit-fmax-slider').value = Math.log(maxFitFreq);
+        }
+
+function renderResultsUI() {
+            const recommendedRangeContainer = document.getElementById('recommended-fit-range-container');
+            const resultsContainer = document.getElementById('results-container');
+            
+            // Clear previous results
+            recommendedRangeContainer.innerHTML = '';
+            resultsContainer.innerHTML = '';
+
+            if (analysisResults.length === 0) return;
+            
+            // --- Populate Recommended Fit Range ---
+            const f_min = parsedFileContent.global_f_min_linearity;
+            const f_max = parsedFileContent.global_f_max_linearity;
+
+            if (!isNaN(f_min) && !isNaN(f_max)) {
+                let recommendedRangeHTML = '<div class="results-card">';
+                 if (f_min < 1e-6 || f_max > 1e11 || f_min >= f_max) {
+                         recommendedRangeHTML += `<p title="Calculation resulted in non-physical values.">Recommended Fit Range: <strong>N/A</strong></p>`;
+                 } else {
+                    const f_min_display = Math.max(0.001, f_min);
+                    const f_max_display = Math.min(1e6, f_max);
+                    const formatFreq = (f) => f >= 1e3 ? `${(f/1e3).toFixed(2)} kHz` : `${f.toFixed(2)} Hz`;
+                    recommendedRangeHTML += `<p title="f_min ensures substrate is thermally thick. f_max ensures 2D heat flow.">Recommended Fit Range: <strong>${formatFreq(f_min_display)} — ${formatFreq(f_max_display)}</strong></p>`;
+                 }
+                recommendedRangeHTML += '</div>';
+                recommendedRangeContainer.innerHTML = recommendedRangeHTML;
+            }
+
+            // --- Populate Per-Dataset Analysis ---
+            const analysisTitle = document.createElement('h2');
+            analysisTitle.textContent = 'Per-Dataset Analysis';
+            resultsContainer.appendChild(analysisTitle);
+            
+            const controlsContainer = document.createElement('div');
+            controlsContainer.id = 'dataset-controls';
+            controlsContainer.className = 'control-group';
+
+            const selector = document.createElement('select');
+            selector.id = 'dataset-selector';
+            analysisResults.forEach((result, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                // --- MODIFICATION IS HERE ---
+                const tempPrefix = result.avg_temp > 0 ? `${result.avg_temp.toFixed(2)} K: ` : '';
+                option.textContent = `${tempPrefix}${formatTimestamp(result.timestamp)}`;
+                // --- END MODIFICATION ---
+                if (index === selectedDatasetIndex) option.selected = true;
+                selector.appendChild(option);
+            });
+            
+            selector.addEventListener('change', (e) => {
+                selectedDatasetIndex = parseInt(e.target.value);
+                isShowingRTPlot = false; // Switch back to dataset view
+                updateFittingUI();
+                displaySingleResult();
+                updateVisualization();
+            });
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.id = 'delete-dataset-btn';
+            deleteBtn.innerHTML = '&#x1F5D1;';
+            deleteBtn.title = "Delete Selected Dataset";
+            deleteBtn.onclick = deleteSelectedDataset;
+
+            controlsContainer.appendChild(selector);
+            controlsContainer.appendChild(deleteBtn);
+            resultsContainer.appendChild(controlsContainer);
+            const cardContainer = document.createElement('div');
+            cardContainer.id = 'single-result-card-container';
+            resultsContainer.appendChild(cardContainer);
+            displaySingleResult();
+        }
+
+        function displaySingleResult() {
+            const cardContainer = document.getElementById('single-result-card-container');
+            if (!cardContainer || analysisResults.length === 0 || !analysisResults[selectedDatasetIndex]) {
+                if(cardContainer) cardContainer.innerHTML = '';
+                return;
+            }
+            const result = analysisResults[selectedDatasetIndex];
+
+            let alpha_text = `<strong>...</strong>`;
+            if(!isNaN(result.alpha)) {
+                alpha_text = `<strong>${result.alpha.toExponential(3)} ± ${result.esd_alpha.toExponential(1)} mm²/s</strong>`;
+            }
+
+            let maxPowerText = '...';
+            if (!isNaN(result.maxPowerPerLength)) {
+                maxPowerText = `<strong>${result.maxPowerPerLength.toFixed(2)} W/m</strong>`;
+            }
+            
+            cardContainer.innerHTML = `
+                <div class="results-card">
+                    <h3>Dataset: ${formatTimestamp(result.timestamp)}</h3>
+                    <p>Avg Temperature: <strong>${result.avg_temp > 0 ? result.avg_temp.toFixed(2) + ' K' : 'N/A'}</strong></p>
+                    <p>Resistance (R₀): <strong>${result.R0.toFixed(2)} ± ${result.esd_R0.toExponential(1)} Ω</strong></p>
+                    <p>Local TCR (α): <strong>${!isNaN(result.local_tcr) ? result.local_tcr.toExponential(2) : '...'} 1/K</strong></p>
+                    <p>Max Power: ${maxPowerText}</p>
+                    <p>Thermal Cond. (k): <strong>${!isNaN(result.k) ? result.k.toExponential(3) + ' ± ' + result.esd_k.toExponential(1) : '...'} W/mK</strong></p>
+                    <p>Thermal Diff. (α): ${alpha_text}</p>
+                </div>`;
+        }
+
+        function deleteSelectedDataset() {
+            if (analysisResults.length === 0) return;
+            const indexToDelete = selectedDatasetIndex;
+            
+            analysisResults.splice(indexToDelete, 1);
+            if (analysisResults.length === 0) {
+                selectedDatasetIndex = 0;
+                document.getElementById('results-container').innerHTML = '';
+                document.getElementById('fitting-controls').classList.add('hidden');
+                document.getElementById('save-report-btn').classList.add('hidden');
+                clearPlot();
+                return;
+            }
+            selectedDatasetIndex = Math.max(0, indexToDelete - 1);
+            isShowingRTPlot = false;
+            updateFittingUI();
+            analyzeAndDisplay(true); 
+        }
+
+        function updateVisualization() {
+            if (isShowingRTPlot) {
+                drawRTPlot();
+            } else {
+                drawDatasetPlot();
+            }
+        }
+
+        const margin = { top: 60, right: 100, bottom: 120, left: 80 };
+        const plotContainer = d3.select("#plot-container");
+
+        function clearPlot() {
+            plotContainer.html(''); // Clears all content (SVGs, DIVs, etc.)
+        }
+
+        function initDatasetPlot() {
+            clearPlot();
+            const bounds = plotContainer.node().getBoundingClientRect();
+            if (bounds.width <= 0 || bounds.height <= 0) return false;
+            const height = bounds.height, width = bounds.width;
+
+            const svg = plotContainer.append("svg").attr("viewBox", `0 0 ${width} ${height}`);
+            const plotArea = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+            
+            plotArea.append("g").attr("class", "axis x-axis-bottom");
+            plotArea.append("g").attr("class", "axis x-axis-top");
+            plotArea.append("g").attr("class", "axis y-axis-left");
+            plotArea.append("g").attr("class", "axis y-axis-right");
+
+            svg.append("text").attr("class", "axis-label").attr("id", "x-label-bottom").attr("text-anchor", "middle");
+            svg.append("text").attr("class", "axis-label").attr("id", "x-label-top").attr("text-anchor", "middle");
+            svg.append("text").attr("class", "axis-label y-label-left").attr("id", "y-label-left").attr("transform", "rotate(-90)").attr("text-anchor", "middle");
+            svg.append("text").attr("class", "axis-label y-label-right").attr("id", "y-label-right").attr("transform", "rotate(90)").attr("text-anchor", "middle");
+            
+            plotArea.append("g").attr("class", "error-bars");
+            plotArea.append("g").attr("class", "plot-dots"); 
+            plotArea.append("line").attr("class", "fit-marker").attr("id", "fmin-marker");
+            plotArea.append("line").attr("class", "fit-marker").attr("id", "fmax-marker");
+            plotArea.append("path").attr("class", "line fit-line-in-phase");
+            plotArea.append("path").attr("class", "line fit-line-out-of-phase");
+            return true;
+        }
+
+        function drawDatasetPlot() {
+            if (!analysisResults[selectedDatasetIndex]) { clearPlot(); return; };
+            currentPlotData = analysisResults[selectedDatasetIndex];
+
+            const { processedData, fitData, inPhaseFitParams, outOfPhaseFitParams, minFitFreq, maxFitFreq } = currentPlotData;
+            if (!processedData || processedData.length === 0) { clearPlot(); return; }
+
+            if (!initDatasetPlot()) return;
+            const svg = plotContainer.select("svg");
+
+            const bounds = plotContainer.node().getBoundingClientRect();
+            const width = bounds.width, height = bounds.height;
+            const plotWidth = width - margin.left - margin.right;
+            const plotHeight = height - margin.top - margin.bottom;
+
+            const xScale = d3.scaleLinear().domain(d3.extent(processedData, d => d.ln_2omega)).range([0, plotWidth]);
+            const xScaleTop = d3.scaleLog().domain(d3.extent(processedData, d => d.freq)).range([0, plotWidth]);
+            
+            const validData = processedData.filter(d => d.isValid && !isNaN(d.v3_in_phase_norm) && !isNaN(d.v3_out_of_phase_norm));
+            const yLeftMin = d3.min(validData, d => d.v3_in_phase_norm - d.esdV3X_norm);
+            const yLeftMax = d3.max(validData, d => d.v3_in_phase_norm + d.esdV3X_norm);
+            const yScaleLeft = d3.scaleLinear().domain([yLeftMin, yLeftMax]).range([plotHeight, 0]).nice();
+
+            const yRightMin = d3.min(validData, d => d.v3_out_of_phase_norm - d.esdV3Y_norm);
+            const yRightMax = d3.max(validData, d => d.v3_out_of_phase_norm + d.esdV3Y_norm);
+            const yScaleRight = d3.scaleLinear().domain([yRightMin, yRightMax]).range([plotHeight, 0]).nice();
+            
+            svg.select(".x-axis-bottom").attr("transform", `translate(0,${plotHeight})`).call(d3.axisBottom(xScale));
+            svg.select(".x-axis-top").call(d3.axisTop(xScaleTop).ticks(5, ".0e"));
+            svg.select(".y-axis-left").call(d3.axisLeft(yScaleLeft).tickFormat(d3.format(".2e")));
+            svg.select(".y-axis-right").attr("transform", `translate(${plotWidth}, 0)`).call(d3.axisRight(yScaleRight).tickFormat(d3.format(".2e")));
+
+            svg.select("#x-label-bottom").attr("x", margin.left + plotWidth / 2).attr("y", height - 50).text("ln(2ω)");
+            svg.select("#x-label-top").attr("x", margin.left + plotWidth / 2).attr("y", 35).text("Frequency (Hz)");
+            svg.select("#y-label-left").attr("y", 15).attr("x", 0 - (margin.top + plotHeight / 2)).text("V3/I³ In-Phase (V/A³)");
+            svg.select("#y-label-right").attr("y", -(width - 25)).attr("x", (margin.top + plotHeight / 2)).text("V3/I³ Out-of-Phase (V/A³)");
+            
+            const xMin = (minFitFreq >= xScaleTop.domain()[0]) ? xScale(Math.log(2 * 2 * Math.PI * minFitFreq)) : -1;
+            svg.select("#fmin-marker").attr("x1", xMin).attr("y1", 0).attr("x2", xMin).attr("y2", plotHeight).style("display", xMin >= 0 ? null : "none");
+            const xMax = (maxFitFreq <= xScaleTop.domain()[1]) ? xScale(Math.log(2 * 2 * Math.PI * maxFitFreq)) : -1;
+            svg.select("#fmax-marker").attr("x1", xMax).attr("y1", 0).attr("x2", xMax).attr("y2", plotHeight).style("display", xMax >= 0 ? null : "none");
+
+            const dotsGroup = svg.select(".plot-dots");
+            dotsGroup.selectAll("*").remove();
+            dotsGroup.selectAll(".dot-in-phase").data(processedData).enter().append("circle").attr("cx", d => xScale(d.ln_2omega)).attr("cy", d => yScaleLeft(d.v3_in_phase_norm)).attr("r", d => d.isValid ? 4 : 2).style("fill", d => d.isValid ? "#3B82F6" : "#cccccc");
+            dotsGroup.selectAll(".dot-out-of-phase").data(processedData).enter().append("circle").attr("cx", d => xScale(d.ln_2omega)).attr("cy", d => yScaleRight(d.v3_out_of_phase_norm)).attr("r", d => d.isValid ? 4 : 2).style("fill", d => d.isValid ? "#F59E0B" : "#cccccc");
+
+            const errorBarsGroup = svg.select(".error-bars");
+            errorBarsGroup.selectAll("*").remove();
+            const capWidth = 3;
+            const errInPhase = errorBarsGroup.selectAll(".error-bar-in-phase").data(validData).enter().append("g").style("stroke", "#3B82F6");
+            errInPhase.append("line").attr("x1", d => xScale(d.ln_2omega)).attr("x2", d => xScale(d.ln_2omega)).attr("y1", d => yScaleLeft(d.v3_in_phase_norm - d.esdV3X_norm)).attr("y2", d => yScaleLeft(d.v3_in_phase_norm + d.esdV3X_norm));
+            
+            const errOutOfPhase = errorBarsGroup.selectAll(".error-bar-out-of-phase").data(validData).enter().append("g").style("stroke", "#F59E0B");
+            errOutOfPhase.append("line").attr("x1", d => xScale(d.ln_2omega)).attr("x2", d => xScale(d.ln_2omega)).attr("y1", d => yScaleRight(d.v3_out_of_phase_norm - d.esdV3Y_norm)).attr("y2", d => yScaleRight(d.v3_out_of_phase_norm + d.esdV3Y_norm));
+           
+            if(fitData && fitData.length > 1) {
+                if(inPhaseFitParams) svg.select(".fit-line-in-phase").datum(fitData).attr("d", d3.line().x(d => xScale(d.ln_2omega)).y(d => yScaleLeft(d.ln_2omega * inPhaseFitParams.slope + inPhaseFitParams.intercept)));
+                if(outOfPhaseFitParams) svg.select(".fit-line-out-of-phase").datum(fitData).attr("d", d3.line().x(d => xScale(d.ln_2omega)).y(d => yScaleRight(d.ln_2omega * outOfPhaseFitParams.slope + outOfPhaseFitParams.intercept)));
+            } else {
+                svg.select(".fit-line-in-phase").attr("d", null);
+                svg.select(".fit-line-out-of-phase").attr("d", null);
+            }
+        }
+
+        function drawRTPlot() {
+            clearPlot();
+
+            const plotData = analysisResults.map(d => ({ x: d.avg_temp, y: d.R0, sigma: d.esd_R0 })).filter(d => d.x > 0 && !isNaN(d.y));
+            if (plotData.length === 0) {
+                plotContainer.append("div").style("text-align", "center").style("padding-top", "50px").text("Not enough data to display R(T) plot.");
+                return;
+            }
+
+            const bounds = plotContainer.node().getBoundingClientRect();
+            if (bounds.width <= 0 || bounds.height <= 0) return;
+            const height = bounds.height, width = bounds.width;
+
+            const plot_margin = { top: 40, right: 40, bottom: 60, left: 80 };
+            const svg = plotContainer.append("svg").attr("viewBox", `0 0 ${width} ${height}`);
+            const plotArea = svg.append("g").attr("transform", `translate(${plot_margin.left},${plot_margin.top})`);
+            const plotWidth = width - plot_margin.left - plot_margin.right;
+            const plotHeight = height - plot_margin.top - plot_margin.bottom;
+            
+            let xExtent = d3.extent(plotData, d => d.x);
+            let yExtent = d3.extent(plotData, d => d.y);
+            
+            if (plotData.length === 1) {
+                xExtent = [xExtent[0] - 1, xExtent[0] + 1];
+                yExtent = [yExtent[0] - yExtent[0]*0.1, yExtent[0] + yExtent[0]*0.1];
+            }
+            const yPadding = (yExtent[1] - yExtent[0]) * 0.1 || 1;
+            
+            const xScale = d3.scaleLinear().domain(xExtent).range([0, plotWidth]).nice();
+            const yScale = d3.scaleLinear().domain([yExtent[0] - yPadding, yExtent[1] + yPadding]).range([plotHeight, 0]).nice();
+            
+            plotArea.append("g").attr("class", "axis").attr("transform", `translate(0,${plotHeight})`).call(d3.axisBottom(xScale));
+            plotArea.append("g").attr("class", "axis").call(d3.axisLeft(yScale));
+
+            svg.append("text").attr("class", "axis-label").attr("x", plot_margin.left + plotWidth / 2).attr("y", height - 10).text("Temperature (K)");
+            svg.append("text").attr("class", "axis-label").attr("transform", "rotate(-90)").attr("y", 15).attr("x", 0 - (plot_margin.top + plotHeight / 2)).attr("text-anchor", "middle").text("Resistance (R₀) [Ω]");
+            
+            const capWidth = 3;
+            const errorBars = plotArea.append("g").selectAll(".rt-error-bar").data(plotData).enter().append("g").attr("class", "rt-error-bar");
+            errorBars.append("line").attr("x1", d => xScale(d.x)).attr("x2", d => xScale(d.x)).attr("y1", d => yScale(d.y - d.sigma)).attr("y2", d => yScale(d.y + d.sigma));
+            errorBars.append("line").attr("x1", d => xScale(d.x) - capWidth).attr("x2", d => xScale(d.x) + capWidth).attr("y1", d => yScale(d.y + d.sigma)).attr("y2", d => yScale(d.y + d.sigma));
+            errorBars.append("line").attr("x1", d => xScale(d.x) - capWidth).attr("x2", d => xScale(d.x) + capWidth).attr("y1", d => yScale(d.y - d.sigma)).attr("y2", d => yScale(d.y - d.sigma));
+            
+            plotArea.append("g").selectAll(".rt-data-point").data(plotData).enter().append("circle").attr("class", "rt-data-point").attr("cx", d => xScale(d.x)).attr("cy", d => yScale(d.y)).attr("r", 4);
+
+            const C0 = parseFloat(document.getElementById('tcr-c0').value);
+            const C1 = parseFloat(document.getElementById('tcr-c1').value);
+            const C2 = parseFloat(document.getElementById('tcr-c2').value);
+
+            if (![C0, C1, C2].some(isNaN)) {
+                const curve_points = d3.range(xScale.domain()[0], xScale.domain()[1], (xScale.domain()[1] - xScale.domain()[0]) / 100);
+                const line = d3.line().x(d => xScale(d)).y(d => yScale(C2 * d * d + C1 * d + C0));
+                plotArea.append("path").datum(curve_points).attr("class", "rt-fit-line").attr("fill", "none").attr("d", line);
+            }
+        }
+        
+        function sanitizeForPDF(text) {
+            return text.replace(/Ω/g, 'Ohm').replace(/α/g, 'alpha').replace(/₀/g, '0').replace(/₁/g, '1').replace(/₂/g, '2').replace(/ₛ/g, 's').replace(/±/g, '+/-');
+        }
+
+async function exportPDFReport() {
+            const btn = document.getElementById('save-report-btn');
+            btn.textContent = 'Generating...';
+            btn.disabled = true;
+
+            const originalSelectedDatasetIndex = selectedDatasetIndex;
+            const tempPlotContainer = d3.select("#pdf-plot-temp-container");
+
+            try {
+                const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const pageHeight = pdf.internal.pageSize.getHeight();
+                const margin = 15;
+                let yPos = margin;
+
+                pdf.setFontSize(20).text("3-Omega Analysis Report", pageWidth / 2, yPos, { align: 'center' });
+                yPos += 10;
+
+                // --- MODIFICATION START ---
+                // The following block is updated to correctly find the nested sample name.
+                let sampleName = 'N/A';
+                const header = parsedFileContent.jsonHeader;
+                if (header) {
+                    sampleName = header.exp?.Sample || // Checks for "exp": { "Sample": "..." }
+                                 header.exp?.sample || // Checks for "exp": { "sample": "..." }
+                                 header.Sample ||      // Checks for "Sample": "..."
+                                 header['sample name'] || // Checks for "sample name": "..."
+                                 'N/A';
+                }
+
+                const startTime = analysisResults.length > 0 ? analysisResults[0].timestamp : null;
+                const endTime = analysisResults.length > 0 ? analysisResults[analysisResults.length - 1].timestamp : null;
+                const measurementDateString = (startTime && endTime) 
+                    ? `${formatTimestamp(startTime)} to ${formatTimestamp(endTime)}`
+                    : 'Not available';
+
+                pdf.setFontSize(12).text(`Sample: ${sampleName}`, pageWidth / 2, yPos, { align: 'center' });
+                yPos += 7;
+                pdf.setFontSize(12).text(`Data measured: ${measurementDateString}`, pageWidth / 2, yPos, { align: 'center' });
+                yPos += 7;
+                // --- MODIFICATION END ---
+
+                pdf.setFontSize(10).text(`Report generated: ${new Date().toLocaleString()}`, pageWidth / 2, yPos, { align: 'center' });
+                yPos += 12;
+
+
+                pdf.setFontSize(10).text("Data File Header Information", margin, yPos);
+                yPos += 6;
+                pdf.setLineWidth(0.2).line(margin, yPos, pageWidth - margin, yPos);
+                yPos += 8;
+                pdf.setFontSize(8).setFont('courier');
+                if (parsedFileContent.jsonHeader) {
+                    const headerString = JSON.stringify(parsedFileContent.jsonHeader, null, 2);
+                    const headerLines = pdf.splitTextToSize(headerString, pageWidth - 2 * margin);
+                    for (const line of headerLines) {
+                        if (yPos > pageHeight - margin) { pdf.addPage(); yPos = margin; }
+                        pdf.text(line, margin, yPos);
+                        yPos += 4;
+                    }
+                } else {
+                    pdf.text("No JSON header found.", margin, yPos);
+                }
+                pdf.setFont('helvetica').setFontSize(10);
+                
+                pdf.addPage();
+                yPos = margin;
+                pdf.setFontSize(16).text("Summary Table", pageWidth / 2, yPos, { align: 'center' });
+                yPos += 12;
+                pdf.setFontSize(9).setFont('courier', 'bold');
+
+                const col_positions = [margin, 50, 95, 145];
+                pdf.text("Temp (K)", col_positions[0], yPos);
+                pdf.text("R0 (Ohm)", col_positions[1], yPos);
+                pdf.text("k (W/mK)", col_positions[2], yPos);
+                pdf.text("alpha (mm2/s)", col_positions[3], yPos);
+                yPos += 2;
+                pdf.setLineWidth(0.3).line(margin, yPos, pageWidth - margin, yPos);
+                yPos += 5;
+                pdf.setFont('courier', 'normal');
+
+                analysisResults.forEach(res => {
+                    if (yPos > pageHeight - margin - 10) { pdf.addPage(); yPos = margin; }
+                    const temp_str = res.avg_temp > 0 ? res.avg_temp.toFixed(2) : 'N/A';
+                    const R0_str = `${res.R0.toFixed(3)} +/- ${res.esd_R0.toExponential(1)}`;
+                    const k_str = !isNaN(res.k) ? `${res.k.toExponential(2)} +/- ${res.esd_k.toExponential(1)}` : 'N/A';
+                    const alpha_str = !isNaN(res.alpha) ? `${res.alpha.toExponential(2)} +/- ${res.esd_alpha.toExponential(1)}` : 'N/A';
+                    
+                    pdf.text(temp_str, col_positions[0], yPos);
+                    pdf.text(R0_str, col_positions[1], yPos);
+                    pdf.text(k_str, col_positions[2], yPos);
+                    pdf.text(alpha_str, col_positions[3], yPos);
+                    yPos += 6;
+                });
+                
+                pdf.setFont('helvetica', 'normal');
+
+                for (let i = 0; i < analysisResults.length; i++) {
+                    pdf.addPage();
+                    yPos = margin;
+                    const result = analysisResults[i];
+
+                    pdf.setFontSize(16).text(`Dataset Analysis: ${formatTimestamp(result.timestamp)}`, pageWidth / 2, yPos, { align: 'center' });
+                    yPos += 12;
+
+                    pdf.setFontSize(12).text("Parameters & Results", margin, yPos);
+                    yPos += 6;
+                    pdf.setLineWidth(0.2).line(margin, yPos, pageWidth - margin, yPos);
+                    yPos += 8;
+                    pdf.setFontSize(9);
+
+                    const col1_x = margin;
+                    const col2_x = margin + (pageWidth - 2 * margin) / 2;
+                    let yPos_col1 = yPos, yPos_col2 = yPos;
+                    const L_val_mm = parseFloat(document.getElementById('wire-length').value);
+                    const L_ppm = parseFloat(document.getElementById('esd-wire-length-ppm').value);
+                    const two_b_val_mm = parseFloat(document.getElementById('wire-width').value);
+                    const two_b_ppm = parseFloat(document.getElementById('esd-wire-width-ppm').value);
+                    const C0 = parseFloat(document.getElementById('tcr-c0').value);
+                    const C1 = parseFloat(document.getElementById('tcr-c1').value);
+                    const C2 = parseFloat(document.getElementById('tcr-c2').value);
+
+                    pdf.text(sanitizeForPDF(`Voltage Probe Distance (L): ${L_val_mm.toFixed(3)} ± ${(L_val_mm * L_ppm / 1e6).toExponential(1)} mm`), col1_x, yPos_col1); yPos_col1 += 6;
+                    pdf.text(sanitizeForPDF(`Wire Width (2b): ${two_b_val_mm.toFixed(3)} ± ${(two_b_val_mm * two_b_ppm / 1e6).toExponential(1)} mm`), col1_x, yPos_col1); yPos_col1 += 6;
+                    pdf.text(sanitizeForPDF(`Substrate Thickness (dₛ): ${document.getElementById('thickness-substrate').value} mm`), col1_x, yPos_col1); yPos_col1 += 6;
+                    pdf.text(`Fit Method: ${document.getElementById('fit-method').value}`, col1_x, yPos_col1); yPos_col1 += 6;
+                    pdf.text(`Fitting Range: ${result.minFitFreq.toFixed(2)} Hz to ${result.maxFitFreq.toFixed(2)} Hz`, col1_x, yPos_col1); yPos_col1 += 6;
+                    yPos_col1 += 4;
+                    pdf.text(sanitizeForPDF(`R(T) Coeffs: C₀=${C0.toExponential(2)}, C₁=${C1.toExponential(2)}, C₂=${C2.toExponential(2)}`), col1_x, yPos_col1); yPos_col1 += 6;
+
+
+                    pdf.text(sanitizeForPDF(`Avg Temperature: ${result.avg_temp > 0 ? result.avg_temp.toFixed(2) + ' K' : 'N/A'}`), col2_x, yPos_col2); yPos_col2 += 6;
+                    pdf.text(sanitizeForPDF(`Resistance (R₀): ${result.R0.toFixed(2)} ± ${result.esd_R0.toExponential(1)} Ω`), col2_x, yPos_col2); yPos_col2 += 6;
+                    pdf.text(sanitizeForPDF(`Local TCR (α): ${!isNaN(result.local_tcr) ? result.local_tcr.toExponential(2) : 'N/A'} 1/K`), col2_x, yPos_col2); yPos_col2 += 6;
+                    const max_power_text_pdf = !isNaN(result.maxPowerPerLength) ? `${result.maxPowerPerLength.toFixed(2)} W/m` : 'N/A';
+                    pdf.text(sanitizeForPDF(`Max Power: ${max_power_text_pdf}`), col2_x, yPos_col2); yPos_col2 += 6;
+                    const k_text_pdf = !isNaN(result.k) ? `${result.k.toExponential(3)} ± ${result.esd_k.toExponential(1)} W/mK` : 'N/A';
+                    pdf.text(sanitizeForPDF(`Thermal Conductivity (k): ${k_text_pdf}`), col2_x, yPos_col2); yPos_col2 += 6;
+                    const alpha_text_pdf = !isNaN(result.alpha) ? `${result.alpha.toExponential(3)} ± ${result.esd_alpha.toExponential(1)} mm²/s` : 'N/A';
+                    pdf.text(sanitizeForPDF(`Thermal Diffusivity (α): ${alpha_text_pdf}`), col2_x, yPos_col2); yPos_col2 += 6;
+                    
+                    if (!isNaN(result.f_min_linearity) && !isNaN(result.f_max_linearity)) {
+                        const f_max_formatted = result.f_max_linearity > 1000 ? `${(result.f_max_linearity/1000).toFixed(1)} kHz` : `${result.f_max_linearity.toFixed(1)} Hz`;
+                        pdf.text(sanitizeForPDF(`Rec. Fit Range: ${result.f_min_linearity.toFixed(1)} Hz - ${f_max_formatted}`), col2_x, yPos_col2); yPos_col2 += 6;
+                    }
+
+                    yPos = Math.max(yPos_col1, yPos_col2) + 5;
+                    selectedDatasetIndex = i;
+                    
+                    isShowingRTPlot = false;
+                    updateVisualization();
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    const visArea = document.getElementById('visualization-area');
+                    const canvas = await html2canvas(visArea, { scale: 2, backgroundColor: '#ffffff' });
+                    const imgData = canvas.toDataURL('image/png');
+                    const availableHeight = pageHeight - yPos - margin;
+                    let imgWidth = pageWidth - 2 * margin, imgHeight = (canvas.height * imgWidth) / canvas.width;
+                    if (imgHeight > availableHeight) { imgHeight = availableHeight; imgWidth = (canvas.width * imgHeight) / canvas.height; }
+                    pdf.addImage(imgData, 'PNG', (pageWidth - imgWidth) / 2, yPos, imgWidth, imgHeight);
+                }
+
+                if (analysisResults.length > 0) {
+                    pdf.addPage();
+                    yPos = margin;
+                    pdf.setFontSize(16).text("Analysis Summary", pageWidth / 2, yPos, { align: 'center' });
+                    yPos += 10;
+                    
+                    tempPlotContainer.html(''); 
+                    drawSummaryPlot(analysisResults, tempPlotContainer);
+                    let canvas1 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
+                    let imgWidth1 = pageWidth - 2 * margin;
+                    if (canvas1.height > 20) {
+                        let imgHeight1 = (canvas1.height * imgWidth1) / canvas1.width;
+                        pdf.addImage(canvas1.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight1);
+                        yPos += imgHeight1 + 10;
+                    }
+
+                    const temps = analysisResults.map(d => d.avg_temp).filter(t => t > 0);
+                    if (new Set(temps).size > 1) {
+                        
+                        tempPlotContainer.html('');
+                        drawRvTPlot(analysisResults, tempPlotContainer);
+                        const canvas2 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
+                        if (canvas2.height > 20) {
+                            const imgHeight2 = (canvas2.height * imgWidth1) / canvas2.width;
+                            if (yPos + imgHeight2 > pageHeight - margin) {
+                                pdf.addPage(); 
+                                yPos = margin; 
+                            }
+                            pdf.addImage(canvas2.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight2);
+                            yPos += imgHeight2 + 10;
+                        }
+                        
+                        tempPlotContainer.html('');
+                        drawConductivityVsTempPlot(analysisResults, tempPlotContainer);
+                        let canvas3 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
+                        if (canvas3.height > 20) {
+                            let imgHeight3 = (canvas3.height * imgWidth1) / canvas3.width;
+                            if (yPos + imgHeight3 > pageHeight - margin) {
+                                pdf.addPage(); 
+                                yPos = margin; 
+                            }
+                            pdf.addImage(canvas3.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight3);
+                            yPos += imgHeight3 + 10;
+                        }
+
+                        tempPlotContainer.html('');
+                        drawDiffusivityVsTempPlot(analysisResults, tempPlotContainer);
+                        let canvas4 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
+                        if (canvas4.height > 20) {
+                            let imgHeight4 = (canvas4.height * imgWidth1) / canvas4.width;
+                             if (yPos + imgHeight4 > pageHeight - margin) {
+                                pdf.addPage(); 
+                                yPos = margin; 
+                             }
+                            pdf.addImage(canvas4.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight4);
+                        }
+                    }
+                }
+                pdf.save(`3omega_report_v2.8_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
+            } catch (error) {
+                console.error("Error generating PDF:", error);
+                showError("An error occurred while generating the PDF. See browser console.");
+            } finally {
+                selectedDatasetIndex = originalSelectedDatasetIndex;
+                if (document.getElementById('dataset-selector')) document.getElementById('dataset-selector').value = selectedDatasetIndex;
+                isShowingRTPlot = false;
+                updateVisualization();
+                tempPlotContainer.html('');
+                btn.textContent = 'Save Report';
+                btn.disabled = false;
+            }
+        }
+
+        function drawSummaryPlot(data, container) {
+            const plotMargin = { top: 40, right: 60, bottom: 50, left: 60 };
+            const width = 700 - plotMargin.left - plotMargin.right;
+            const height = 400 - plotMargin.top - plotMargin.bottom;
+
+            const svg = container.append("svg").attr("width", width + plotMargin.left + plotMargin.right).attr("height", height + plotMargin.top + plotMargin.bottom).append("g").attr("transform", `translate(${plotMargin.left},${plotMargin.top})`);
+            
+            const validData = data.filter(d => !isNaN(d.k) && !isNaN(d.alpha));
+            if (validData.length === 0) return;
+
+            const xScale = d3.scalePoint().domain(validData.map((d, i) => i + 1)).range([0, width]).padding(0.5);
+            
+            const [k_min, k_max] = d3.extent(validData, d => d.k);
+            const [alpha_min, alpha_max] = d3.extent(validData, d => d.alpha);
+
+            const y1Scale = d3.scaleLinear().domain([k_min * 0.9, k_max * 1.1]).range([height, 0]).nice();
+            const y2Scale = d3.scaleLinear().domain([alpha_min * 0.9, alpha_max * 1.1]).range([height, 0]).nice();
+
+            svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(xScale));
+            svg.append("g").call(d3.axisLeft(y1Scale).tickFormat(d3.format(".2s"))).style("color", "#1E40AF");
+            svg.append("g").attr("transform", `translate(${width},0)`).call(d3.axisRight(y2Scale).tickFormat(d3.format(".2s"))).style("color", "#B45309");
+
+            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", height + 40).text("Dataset Index");
+            svg.append("text").attr("text-anchor", "middle").attr("transform", "rotate(-90)").attr("y", -plotMargin.left + 20).attr("x", -height / 2).text("Thermal Conductivity (k) [W/mK]").style("fill", "#1E40AF");
+            svg.append("text").attr("text-anchor", "middle").attr("transform", "rotate(90)").attr("y", -width - plotMargin.right + 20).attr("x", height / 2).text("Thermal Diffusivity (α) [mm²/s]").style("fill", "#B45309");
+            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", -15).text("Summary of Results").style("font-size", "16px").style("font-weight", "bold");
+            
+            const capWidth = 4;
+            const errK = svg.selectAll(".err-k").data(validData).enter().append("g").style("stroke", "#1E40AF");
+            errK.append("line").attr("x1", (d, i) => xScale(i + 1)).attr("x2", (d, i) => xScale(i + 1)).attr("y1", d => y1Scale(d.k - d.esd_k)).attr("y2", d => y1Scale(d.k + d.esd_k));
+            errK.append("line").attr("x1", (d, i) => xScale(i + 1) - capWidth).attr("x2", (d, i) => xScale(i + 1) + capWidth).attr("y1", d => y1Scale(d.k + d.esd_k)).attr("y2", d => y1Scale(d.k + d.esd_k));
+            errK.append("line").attr("x1", (d, i) => xScale(i + 1) - capWidth).attr("x2", (d, i) => xScale(i + 1) + capWidth).attr("y1", d => y1Scale(d.k - d.esd_k)).attr("y2", d => y1Scale(d.k - d.esd_k));
+
+            const errAlpha = svg.selectAll(".err-alpha").data(validData).enter().append("g").style("stroke", "#B45309");
+            errAlpha.append("line").attr("x1", (d, i) => xScale(i + 1)).attr("x2", (d, i) => xScale(i + 1)).attr("y1", d => y2Scale(d.alpha - d.esd_alpha)).attr("y2", d => y2Scale(d.alpha + d.esd_alpha));
+            errAlpha.append("line").attr("x1", (d, i) => xScale(i + 1) - capWidth).attr("x2", (d, i) => xScale(i + 1) + capWidth).attr("y1", d => y2Scale(d.alpha + d.esd_alpha)).attr("y2", d => y2Scale(d.alpha + d.esd_alpha));
+            errAlpha.append("line").attr("x1", (d, i) => xScale(i + 1) - capWidth).attr("x2", (d, i) => xScale(i + 1) + capWidth).attr("y1", d => y2Scale(d.alpha - d.esd_alpha)).attr("y2", d => y2Scale(d.alpha - d.esd_alpha));
+
+            svg.selectAll(".dot-k").data(validData).enter().append("circle").attr("cx", (d, i) => xScale(i + 1)).attr("cy", d => y1Scale(d.k)).attr("r", 5).style("fill", "#1E40AF");
+            svg.selectAll(".dot-alpha").data(validData).enter().append("circle").attr("cx", (d, i) => xScale(i + 1)).attr("cy", d => y2Scale(d.alpha)).attr("r", 5).style("fill", "#B45309");
+        }
+
+        function drawRvTPlot(data, container) {
+            const plotData = data.map(d => ({ x: d.avg_temp, y: d.R0, sigma: d.esd_R0 })).filter(d => d.x > 0 && !isNaN(d.y));
+            if (plotData.length < 2) return;
+
+            const plotMargin = { top: 40, right: 40, bottom: 50, left: 60 };
+            const width = 700 - plotMargin.left - plotMargin.right, height = 400 - plotMargin.top - plotMargin.bottom;
+            const svg = container.append("svg").attr("width", width + plotMargin.left + plotMargin.right).attr("height", height + plotMargin.top + plotMargin.bottom).append("g").attr("transform", `translate(${plotMargin.left},${plotMargin.top})`);
+            
+            const [y_min, y_max] = d3.extent(plotData, d => d.y);
+            
+            const xScale = d3.scaleLinear().domain(d3.extent(plotData, d => d.x)).range([0, width]).nice();
+            const yScale = d3.scaleLinear().domain([y_min * 0.99, y_max * 1.01]).range([height, 0]).nice();
+            
+            svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(xScale));
+            svg.append("g").call(d3.axisLeft(yScale));
+
+            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", height + 40).text("Temperature (K)");
+            svg.append("text").attr("text-anchor", "middle").attr("transform", "rotate(-90)").attr("y", -plotMargin.left + 20).attr("x", -height / 2).text("Resistance (R₀) [Ω]");
+            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", -15).text("Resistance vs. Temperature").style("font-size", "16px").style("font-weight", "bold");
+
+            const capWidth = 3;
+            const errRY = svg.selectAll(".err-r-y").data(plotData).enter().append("g").style("stroke", "gray");
+            errRY.append("line").attr("x1", d => xScale(d.x)).attr("x2", d => xScale(d.x)).attr("y1", d => yScale(d.y - d.sigma)).attr("y2", d => yScale(d.y + d.sigma));
+            errRY.append("line").attr("x1", d => xScale(d.x) - capWidth).attr("x2", d => xScale(d.x) + capWidth).attr("y1", d => yScale(d.y + d.sigma)).attr("y2", d => yScale(d.y + d.sigma));
+            errRY.append("line").attr("x1", d => xScale(d.x) - capWidth).attr("x2", d => xScale(d.x) + capWidth).attr("y1", d => yScale(d.y - d.sigma)).attr("y2", d => yScale(d.y - d.sigma));
+            
+            svg.selectAll(".dot-r").data(plotData).enter().append("circle").attr("cx", d => xScale(d.x)).attr("cy", d => yScale(d.y)).attr("r", 4).style("fill", "#059669");
+
+            const fit_coeffs = parsedFileContent.rt_fit_coefficients;
+            if (fit_coeffs && fit_coeffs.success) {
+                const { c0, c1, c2 } = fit_coeffs;
+                const curve_points = d3.range(xScale.domain()[0], xScale.domain()[1], (xScale.domain()[1] - xScale.domain()[0]) / 100);
+                
+                const line = d3.line()
+                    .x(d => xScale(d))
+                    .y(d => yScale(c2 * d * d + c1 * d + c0));
+
+                svg.append("path")
+                    .datum(curve_points)
+                    .attr("fill", "none")
+                    .attr("stroke", "#d97706")
+                    .attr("stroke-width", 2)
+                    .attr("stroke-dasharray", "5,5")
+                    .attr("d", line);
+
+                const fitText = `Fit: R(T) = ${c2.toExponential(2)}T² + ${c1.toExponential(2)}T + ${c0.toExponential(2)}`;
+                svg.append("text").attr("x", width).attr("y", 0).attr("text-anchor", "end").style("font-size", "12px").text(fitText);
+            }
+        }
+
+        function drawConductivityVsTempPlot(data, container) {
+            const plotData = data.filter(d => d.avg_temp > 0 && !isNaN(d.k));
+            if (plotData.length < 2) return;
+            const plotMargin = { top: 40, right: 40, bottom: 50, left: 60 };
+            const width = 700 - plotMargin.left - plotMargin.right, height = 400 - plotMargin.top - plotMargin.bottom;
+            const svg = container.append("svg").attr("width", width + plotMargin.left + plotMargin.right).attr("height", height + plotMargin.top + plotMargin.bottom).append("g").attr("transform", `translate(${plotMargin.left},${plotMargin.top})`);
+            
+            const [k_min, k_max] = d3.extent(plotData, d => d.k);
+
+            const xScale = d3.scaleLinear().domain(d3.extent(plotData, d => d.avg_temp)).range([0, width]).nice();
+            const yScale = d3.scaleLinear().domain([k_min * 0.9, k_max * 1.1]).range([height, 0]).nice();
+
+            svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(xScale));
+            svg.append("g").call(d3.axisLeft(yScale).tickFormat(d3.format(".2s"))).style("color", "#1E40AF");
+
+            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", height + 40).text("Temperature (K)");
+            svg.append("text").attr("text-anchor", "middle").attr("transform", "rotate(-90)").attr("y", -plotMargin.left + 20).attr("x", -height / 2).text("Thermal Conductivity (k) [W/mK]").style("fill", "#1E40AF");
+            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", -15).text("Thermal Conductivity vs. Temperature").style("font-size", "16px").style("font-weight", "bold");
+
+            const capWidth = 4;
+            const errK = svg.selectAll(".err-k-t").data(plotData).enter().append("g").style("stroke", "#1E40AF");
+            errK.append("line").attr("x1", d => xScale(d.avg_temp)).attr("x2", d => xScale(d.avg_temp)).attr("y1", d => yScale(d.k - d.esd_k)).attr("y2", d => yScale(d.k + d.esd_k));
+            errK.append("line").attr("x1", d => xScale(d.avg_temp) - capWidth).attr("x2", d => xScale(d.avg_temp) + capWidth).attr("y1", d => yScale(d.k + d.esd_k)).attr("y2", d => yScale(d.k + d.esd_k));
+            errK.append("line").attr("x1", d => xScale(d.avg_temp) - capWidth).attr("x2", d => xScale(d.avg_temp) + capWidth).attr("y1", d => yScale(d.k - d.esd_k)).attr("y2", d => yScale(d.k - d.esd_k));
+            
+            svg.selectAll(".dot-k-t").data(plotData).enter().append("circle").attr("cx", d => xScale(d.avg_temp)).attr("cy", d => yScale(d.k)).attr("r", 5).style("fill", "#1E40AF");
+        }
+
+        function drawDiffusivityVsTempPlot(data, container) {
+            const plotData = data.filter(d => d.avg_temp > 0 && !isNaN(d.alpha));
+            if (plotData.length < 2) return;
+            const plotMargin = { top: 40, right: 40, bottom: 50, left: 60 };
+            const width = 700 - plotMargin.left - plotMargin.right, height = 400 - plotMargin.top - plotMargin.bottom;
+            const svg = container.append("svg").attr("width", width + plotMargin.left + plotMargin.right).attr("height", height + plotMargin.top + plotMargin.bottom).append("g").attr("transform", `translate(${plotMargin.left},${plotMargin.top})`);
+            
+            const [alpha_min, alpha_max] = d3.extent(plotData, d => d.alpha);
+
+            const xScale = d3.scaleLinear().domain(d3.extent(plotData, d => d.avg_temp)).range([0, width]).nice();
+            const yScale = d3.scaleLinear().domain([alpha_min * 0.9, alpha_max * 1.1]).range([height, 0]).nice();
+
+            svg.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(xScale));
+            svg.append("g").call(d3.axisLeft(yScale).tickFormat(d3.format(".2s"))).style("color", "#B45309");
+
+            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", height + 40).text("Temperature (K)");
+            svg.append("text").attr("text-anchor", "middle").attr("transform", "rotate(-90)").attr("y", -plotMargin.left + 20).attr("x", -height / 2).text("Thermal Diffusivity (α) [mm²/s]").style("fill", "#B45309");
+            svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", -15).text("Thermal Diffusivity vs. Temperature").style("font-size", "16px").style("font-weight", "bold");
+
+            const capWidth = 4;
+            const errAlpha = svg.selectAll(".err-alpha-t").data(plotData).enter().append("g").style("stroke", "#B45309");
+            errAlpha.append("line").attr("x1", d => xScale(d.avg_temp)).attr("x2", d => xScale(d.avg_temp)).attr("y1", d => yScale(d.alpha - d.esd_alpha)).attr("y2", d => yScale(d.alpha + d.esd_alpha));
+            errAlpha.append("line").attr("x1", d => xScale(d.avg_temp) - capWidth).attr("x2", d => xScale(d.avg_temp) + capWidth).attr("y1", d => yScale(d.alpha + d.esd_alpha)).attr("y2", d => yScale(d.alpha + d.esd_alpha));
+            errAlpha.append("line").attr("x1", d => xScale(d.avg_temp) - capWidth).attr("x2", d => xScale(d.avg_temp) + capWidth).attr("y1", d => yScale(d.alpha - d.esd_alpha)).attr("y2", d => yScale(d.alpha - d.esd_alpha));
+
+            svg.selectAll(".dot-alpha-t").data(plotData).enter().append("circle").attr("cx", d => xScale(d.avg_temp)).attr("cy", d => yScale(d.alpha)).attr("r", 5).style("fill", "#B45309");
+        }
+
+
+        // --- Resize
+        const resizer = document.getElementById('drag-handle');
+        const leftPanel = document.getElementById('controls-panel');
+        let isResizing = false;
+        resizer.addEventListener('mousedown', e => { e.preventDefault(); isResizing = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; window.addEventListener('mousemove', handleMouseMove); window.addEventListener('mouseup', stopResize); });
+        function handleMouseMove(e) { if (!isResizing) return; const newLeftWidth = e.clientX - resizer.parentElement.getBoundingClientRect().left; if (newLeftWidth > 350 && newLeftWidth < resizer.parentElement.clientWidth - 400) { leftPanel.style.width = `${newLeftWidth}px`; updateVisualization(); } }
+        function stopResize() { isResizing = false; document.body.style.cursor = 'default'; document.body.style.userSelect = 'auto'; window.removeEventListener('mousemove', handleMouseMove); window.removeEventListener('mouseup', stopResize); }
+        new ResizeObserver(() => { if (analysisResults.length > 0) { updateVisualization(); } }).observe(plotContainer.node());
+    });
+</script>
+</body>
+</html>
