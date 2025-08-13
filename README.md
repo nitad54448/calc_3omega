@@ -58,8 +58,9 @@ The user must provide several key experimental and analysis parameters in the UI
 * **Phase Correction**: A checkbox to apply a 180° phase correction, which inverts the sign of the in-phase ($V_{3x}$) data.
 * **Voltage Probe Distance (L)** and its uncertainty (in ppm).
 * **Wire Width (2b)** and its uncertainty (in ppm).
-* **Substrate Thickness (dₛ)**.
-* **R(T) Coefficients (C₀, C₁, C₂) **: Defines the resistance-temperature relationship as $R(T) = C_2T^2 + C_1T + C_0$. These are used to calculate the resistance $R(T)$ and the local TCR $\alpha_{TCR}$ at the average temperature of each dataset.
+* **Substrate Thickness (dₛ)**
+* **R(T) Coefficients (C₀, C₁, C₂)**: Defines the resistance-temperature relationship as
+$R(T) = C_2T^2 + C_1T + C_0$. These are used to calculate the resistance $R(T)$ and the local TCR $\alpha_{TCR}$ at the average temperature of each dataset.
 
 ### 3.3. The 3D Surface Fitting Process
 
