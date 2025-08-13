@@ -1,6 +1,6 @@
 # 3-Omega 3D Surface Fit Analyzer: Explanation
 
-### Note: a similar program but using linear fit is available in this repository, see it's help file for details.
+### Note: a similar program but using linear fit is available in this repository, see README - Linear FIT.md file for details.
 
 ## 1. Introduction
 
