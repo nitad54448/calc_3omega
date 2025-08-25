@@ -1,0 +1,23 @@
+{
+  "name": "calc_3omega",
+  "version": "1.0.0",
+  "description": "This document provides a detailed explanation for the \"3-Omega 3D Surface Fit Analyzer\" web application. This tool is designed to analyze experimental data obtained from the 3-omega ($3\\omega$) method to determine the thermal conductivity and thermal diffusivity of materials, typically thin films or substrates.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nitad54448/calc_3omega.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/nitad54448/calc_3omega/issues"
+  },
+  "homepage": "https://github.com/nitad54448/calc_3omega#readme",
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}
