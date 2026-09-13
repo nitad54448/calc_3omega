@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3-Omega Surface Fit</title>
+    <title>3-Omega Surface Fit — v4.0.2</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -27,9 +27,9 @@
             height: calc(100vh - 32px); /* Adjust for footer */
         }
         #controls-panel {
-            width: 400px;
-            min-width: 350px;
-            max-width: 600px;
+            width: 490px;
+            min-width: 430px;
+            max-width: 760px;
             flex-shrink: 0;
             padding: 24px;
             background-color: #111827; /* Dark blue-gray */
@@ -225,7 +225,7 @@
         #save-report-btn:hover { background-color: #15803d; }
         #save-report-btn:disabled { background-color: #4b5563; color: #9ca3af; cursor: not-allowed; }
 
-        #pdf-plot-temp-container { position: absolute; left: -9999px; top: -9999px; width: 800px; height: 1200px; background-color: white; z-index: -100; }
+        #pdf-plot-temp-container { position: absolute; left: -9999px; top: -9999px; width: 800px; height: 400px; background-color: white; z-index: -100; }
         #error-container { position: fixed; top: 20px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 10px; }
 
         /* --- Plot style for D3 R(T) graph --- */
@@ -236,6 +236,22 @@
         .rt-data-point { fill: #059669; }
         .rt-error-bar { stroke: #555; stroke-width: 1px; }
         #plot-container .svg-container { width: 100%; height: 100%; } /* D3 plot container */
+
+        * { box-sizing: border-box; }
+        [hidden] { display: none !important; }
+        .hidden { display: none !important; }
+        .tabs { display: grid; grid-template-columns: repeat(4,1fr); gap: 4px; margin-bottom: 20px; }
+        .tabs button, .action { padding: 11px 5px; border: 1px solid #475569; border-radius: 6px; background: #1e293b; color: #cbd5e1; cursor: pointer; font: inherit; font-size: 13px; }
+        .tabs button[aria-selected="true"] { background: #2563eb; border-color: #60a5fa; color: white; }
+        button:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
+        button:disabled { opacity: .45; cursor: default; }
+        #dataset-selector { min-width: 0; font-size: 12px; }
+        #dataset-controls { gap: 5px; }
+        .help { color: #94a3b8; font-size: 13px; line-height: 1.6; }
+        #recommended-fit-range-container { margin: 18px 0; font-size: 13px; color: #93c5fd; }
+        #error-container:not(:empty) { background:#991b1b; color:white; padding:14px; border-radius:8px; max-width:460px; }
+        input[id^="tcr-s"] { margin-top: 4px; }
+        @media(max-width: 850px) { body { height:auto; overflow:auto; } #app-container { display:block; height:auto; } #controls-panel { width:100% !important; min-width:0; max-width:none; } #drag-handle { display:none; } #visualization-area { height:65vh; min-height:400px; margin-bottom:32px; } }
     </style>
 </head>
 <body>
@@ -243,7 +259,7 @@
         <div id="controls-panel">
             <h1>3-Omega Surface Fit</h1>
 
-            <div class="control-group">
+<div class="tabs" role="tablist" aria-label="Analysis controls"><button type="button" role="tab" id="tab-exp" data-tab="exp-tab" aria-controls="exp-tab" aria-selected="true" tabindex="0">Exp Data</button><button type="button" role="tab" id="tab-resistance" data-tab="resistance-tab" aria-controls="resistance-tab" aria-selected="false" tabindex="-1">Resistance</button><button type="button" role="tab" id="tab-fit" data-tab="fit-tab" aria-controls="fit-tab" aria-selected="false" tabindex="-1">Fit</button><button type="button" role="tab" id="tab-analysis" data-tab="analysis-tab" aria-controls="analysis-tab" aria-selected="false" tabindex="-1">Analysis</button></div><div id="dataset-controls" class="control-group"><button id="prev-dataset-btn" class="nav-btn" aria-label="Previous dataset">◀</button><select id="dataset-selector" aria-label="Dataset"></select><button id="next-dataset-btn" class="nav-btn" aria-label="Next dataset">▶</button><button id="delete-dataset-btn" aria-label="Delete dataset">Delete</button></div><section role="tabpanel" id="exp-tab" aria-labelledby="tab-exp">            <div class="control-group">
                 <label>Upload Data File</label>
                 <div class="file-upload-container">
                     <input type="file" id="file-upload" class="file-input-hidden">
@@ -281,21 +297,26 @@
                 <input type="number" id="thickness-substrate" value="3">
             </div>
 
-            <h2>R(T) = C₂T² + C₁T + C₀</h2>
+<p id="data-status" class="help">Load the instrument text file. Geometry is entered in mm; uncertainties in ppm.</p></section>
+<section role="tabpanel" id="resistance-tab" aria-labelledby="tab-resistance" hidden><p class="help">Measured resistance calibrates R(T). Predicted resistance and the full calibration covariance determine thermal properties and power.</p>            <h2>R(T) = C₂T² + C₁T + C₀</h2>
             <div class="control-group">
                 <label for="tcr-c0">C0 (Ohm)</label>
-                <input type="number" id="tcr-c0" value="0" step="any">
+                <input aria-label="C0 coefficient" type="number" id="tcr-c0" value="" step="any">
+                <label for="tcr-s0">C0 uncertainty (1σ, same units)</label><input id="tcr-s0" type="number" min="0" step="any" placeholder="Required">
             </div>
             <div class="control-group">
                 <label for="tcr-c1">C1 (Ohm/K)</label>
-                <input type="number" id="tcr-c1" value="0.0035" step="any">
+                <input aria-label="C1 coefficient" type="number" id="tcr-c1" value="" step="any">
+                <label for="tcr-s1">C1 uncertainty (1σ, same units)</label><input id="tcr-s1" type="number" min="0" step="any" placeholder="Required">
             </div>
             <div class="control-group">
                 <label for="tcr-c2">C2 (Ohm/K^2)</label>
-                <input type="number" id="tcr-c2" value="0" step="any">
+                <input aria-label="C2 coefficient" type="number" id="tcr-c2" value="" step="any">
+                <label for="tcr-s2">C2 uncertainty (1σ, same units)</label><input id="tcr-s2" type="number" min="0" step="any" placeholder="Required">
             </div>
 
-            <div id="fitting-controls" class="hidden">
+<button id="refit-resistance" class="action">Refit R(T) from loaded datasets</button><p id="calibration-status" class="help">Load data for automatic calibration, or enter coefficients and 1σ uncertainties.</p></section>
+<section role="tabpanel" id="fit-tab" aria-labelledby="tab-fit" hidden>            <div id="fitting-controls" class="hidden">
                 <h2>Fitting Controls (Linear Fit)</h2>
                 <div class="control-group">
                     <label for="fit-method">Fit Method</label>
@@ -333,8 +354,8 @@
                 <div id="recommended-fit-range-container"></div>
             </div>
 
-            <div id="results-container"></div>
-            <button id="save-report-btn" class="hidden">Save Report</button>
+<p class="help">The fitting method applies to all datasets. Frequency limits are per dataset unless Global is selected. Robust uncertainties use approximate conditional weighted covariance, inflated for excess scatter.</p></section>
+<section role="tabpanel" id="analysis-tab" aria-labelledby="tab-analysis" hidden><div id="results-container"><div id="single-result-card-container"></div></div><button id="save-report-btn" class="hidden">Save Report</button><p class="help">Uncertainties are 1σ. Calibration and voltage-fit errors are assumed independent. Current, temperature, and model systematic uncertainties are not included.</p></section>
         </div>
         <div id="drag-handle"></div>
         <div id="visualization-area">
@@ -342,595 +363,206 @@
         </div>
     </div>
     <footer>
-        <span>NitaD, Univ Paris-Saclay, v3.9, 13 August 2025</span>
+        <span>NitaD, Univ Paris-Saclay, v4.0.2, 13 September 2026</span>
 
     </footer>
     <div id="pdf-plot-temp-container"></div>
     <div id="error-container"></div>
 
 <script>
-   
-    window.addEventListener('DOMContentLoaded', () => {
-        const { jsPDF } = window.jspdf;
-        let parsedFileContent = { datasets: [], jsonHeader: null };
-        let analysisResults = [];
-        let selectedDatasetIndex = 0;
-        let isShowingRTPlot = false;
+'use strict';
+window.addEventListener('DOMContentLoaded', () => {
+const $ = id => document.getElementById(id);
+const finite = Number.isFinite;
+const minOf=a=>a.reduce((m,v)=>Math.min(m,v),Infinity);
+const maxOf=a=>a.reduce((m,v)=>Math.max(m,v),-Infinity);
+const norm=a=>a.reduce((n,v)=>Math.hypot(n,v),0);
+const num = id => {
+ const input=$(id), value=input.value.trim();
+ if(value==='')return NaN;
+ return input.dataset.displayValue===value ? Number(input.dataset.rawValue) : Number(value);
+};
+const compact = (value,digits=4) => {
+ if(!finite(value))return 'N/A';
+ if(value===0)return '0';
+ return Math.abs(value)<0.001 || Math.abs(value)>=1e5
+  ? value.toExponential(digits-1).replace(/\.?0+e/,'e')
+  : String(Number(value.toPrecision(digits)));
+};
+// Preserve numerical precision when an unchanged, shortened field is read back.
+function setNumericDisplay(id,value,digits=4){
+ const input=$(id);
+ input.value=compact(value,digits);
+ input.dataset.displayValue=input.value;
+ input.dataset.rawValue=String(value);
+ input.title='Full precision: '+String(value);
+} 
+const fmt = (x, digits=3) => finite(x) ? x.toExponential(digits) : 'N/A';
+let parsedFileContent = {datasets: [], jsonHeader:null}, analysisResults = [], selectedDatasetIndex = 0;
+let isShowingRTPlot = false, calibration = null, exporting = false, loadSequence = 0;
+let plotReady = Promise.resolve();
+const plotContainer = $('plot-container');
+function showError(message) { $('error-container').textContent=message; setTimeout(()=>{$('error-container').textContent='';},8000); }
+function activateTab(id) {
+ document.querySelectorAll('[role=tab]').forEach(b=>{const on=b.dataset.tab===id;b.setAttribute('aria-selected',on);b.tabIndex=on?0:-1;});
+ document.querySelectorAll('[role=tabpanel]').forEach(p=>p.hidden=p.id!==id);
+ isShowingRTPlot=id==='resistance-tab'; updateVisualization();
+}
+document.querySelectorAll('[role=tab]').forEach((b,i,buttons)=>{b.onclick=()=>activateTab(b.dataset.tab);b.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const j=e.key==='Home'?0:e.key==='End'?buttons.length-1:(i+(e.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length;buttons[j].focus();activateTab(buttons[j].dataset.tab);};});
 
-        document.getElementById('file-upload').addEventListener('change', handleFileSelect, false);
-        
-        const globalParamIds = ['wire-length', 'esd-wire-length-ppm', 'wire-width', 'esd-wire-width-ppm', 'thickness-substrate', 'phase-shift-180'];
-        globalParamIds.forEach(id => {
-            document.getElementById(id)?.addEventListener('change', () => {
-                 if (parsedFileContent.datasets.length > 0) analyzeAndDisplay(true);
-            });
-        });
-        
-        const tcrCoeffIds = ['tcr-c0', 'tcr-c1', 'tcr-c2'];
-        tcrCoeffIds.forEach(id => {
-            document.getElementById(id)?.addEventListener('change', () => {
-                if (parsedFileContent.datasets.length > 0) {
-                    analyzeAndDisplay(true);
-                    isShowingRTPlot = true;
-                    updateVisualization();
-                }
-            });
-        });
-
-        const localParamIds = ['fit-method'];
-        localParamIds.forEach(id => {
-            document.getElementById(id)?.addEventListener('change', () => {
-                 if (parsedFileContent.datasets.length > 0) analyzeAndDisplay(false);
-            });
-        });
-        document.getElementById('save-report-btn').addEventListener('click', exportPDFReport);
-
-        function showError(message, duration = 5000) {
-            const errorContainer = document.getElementById('error-container');
-            const errorDiv = document.createElement('div');
-            errorDiv.textContent = message;
-            errorDiv.style.backgroundColor = '#ef4444';
-            errorDiv.style.color = 'white';
-            errorDiv.style.padding = '10px 20px';
-            errorDiv.style.borderRadius = '5px';
-            errorDiv.style.boxShadow = '0 2px 10px rgba(0,0,0,0.2)';
-            errorDiv.style.opacity = '1';
-            errorDiv.style.transition = 'opacity 0.5s ease-out';
-            errorContainer.appendChild(errorDiv);
-            setTimeout(() => {
-                errorDiv.style.opacity = '0';
-                setTimeout(() => errorDiv.remove(), 500);
-            }, duration);
-        }
-
-        function handleFileSelect(event) {
-            const file = event.target.files[0];
-            const fileNameDisplay = document.getElementById('file-name-display');
-
-            if (!file) {
-                fileNameDisplay.textContent = 'No file selected';
-                return;
-            }
-            fileNameDisplay.textContent = file.name;
-            document.body.style.cursor = 'wait';
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                setTimeout(() => {
-                    const contents = e.target.result;
-                    parsedFileContent = parseData(contents);
-                    if (parsedFileContent.datasets.length > 0) {
-                        
-                        const tcr_data = parsedFileContent.datasets
-                            .map(ds => ({ x: ds.avg_temp, y: ds.R0, sigma: ds.esd_R0 }))
-                            .filter(d => !isNaN(d.x) && !isNaN(d.y) && d.x > 0);
-
-                        const uniqueTemps = new Set(tcr_data.map(d => d.x));
-                        if (tcr_data.length >= 2 && uniqueTemps.size >= 2) {
-                            const fit_coeffs = weightedPolynomialRegression2ndOrder(tcr_data);
-                            if (fit_coeffs.success) {
-                                parsedFileContent.rt_fit_coefficients = fit_coeffs;
-                                document.getElementById('tcr-c0').value = fit_coeffs.c0.toExponential(4);
-                                document.getElementById('tcr-c1').value = fit_coeffs.c1.toExponential(4);
-                                document.getElementById('tcr-c2').value = fit_coeffs.c2.toExponential(4);
-                            }
-                        }
-                        
-                        const allFreqs = parsedFileContent.datasets.flatMap(ds => ds.data.map(d => d.freq));
-                        const globalMinFreq = Math.max(0.01, Math.min(...allFreqs));
-                        const globalMaxFreq = Math.max(...allFreqs);
-                        
-                        analysisResults = parsedFileContent.datasets.map(dataset => {
-                            return { ...dataset, minFitFreq: globalMinFreq, maxFitFreq: globalMaxFreq };
-                        });
-
-                        selectedDatasetIndex = 0;
-                        isShowingRTPlot = false;
-                        document.getElementById('fitting-controls').classList.remove('hidden');
-                        document.getElementById('save-report-btn').classList.remove('hidden');
-                        setupFittingSliders();
-                        analyzeAndDisplay(true); // This will reset the cursor
-                    } else {
-                        showError("Could not parse any valid datasets from the file.");
-                        document.getElementById('fitting-controls').classList.add('hidden');
-                        document.getElementById('save-report-btn').classList.add('hidden');
-                        document.getElementById('results-container').innerHTML = '';
-                        clearPlot();
-                        document.body.style.cursor = 'default';
-                    }
-                }, 10);
-            };
-            reader.readAsText(file);
-            event.target.value = null;
-        }
-
-    function setupFittingSliders() {
-            const allFreqs = parsedFileContent.datasets.flatMap(ds => ds.data.map(d => d.freq));
-            const minFreq = Math.max(0.01, Math.min(...allFreqs));
-            const maxFreq = Math.max(...allFreqs);
-
-            const logMin = Math.log(minFreq);
-            const logMax = Math.log(maxFreq);
-
-            const fminSlider = document.getElementById('fit-fmin-slider');
-            const fminValue = document.getElementById('fit-fmin');
-            const fminGlobal = document.getElementById('fit-fmin-global');
-            const fmaxSlider = document.getElementById('fit-fmax-slider');
-            const fmaxValue = document.getElementById('fit-fmax');
-            const fmaxGlobal = document.getElementById('fit-fmax-global');
-
-            fminValue.min = minFreq.toFixed(2); fminValue.max = maxFreq.toFixed(2);
-            fmaxValue.min = minFreq.toFixed(2); fmaxValue.max = maxFreq.toFixed(2);
-            fminSlider.min = logMin; fminSlider.max = logMax;
-            fmaxSlider.min = logMin; fmaxSlider.max = logMax;
-
-            const step = (logMax - logMin) / 200;
-            fminSlider.step = step; fmaxSlider.step = step;
-            fminSlider.value = logMin; fminValue.value = minFreq.toFixed(2);
-            fmaxSlider.value = logMax; fmaxValue.value = maxFreq.toFixed(2);
-
-            const updateAnalysisAfterFreqChange = () => {
-                if (parsedFileContent.datasets.length === 0) return;
-                isShowingRTPlot = false;
-                const minFreqVal = parseFloat(fminValue.value);
-                const maxFreqVal = parseFloat(fmaxValue.value);
-                let analyzeAll = false;
-
-                if (fminGlobal.checked) {
-                    analysisResults.forEach(res => res.minFitFreq = minFreqVal);
-                    analyzeAll = true;
-                }
-                if (fmaxGlobal.checked) {
-                    analysisResults.forEach(res => res.maxFitFreq = maxFreqVal);
-                    analyzeAll = true;
-                }
-                
-                const currentResult = analysisResults[selectedDatasetIndex];
-                if (currentResult) {
-                    if (!fminGlobal.checked) currentResult.minFitFreq = minFreqVal;
-                    if (!fmaxGlobal.checked) currentResult.maxFitFreq = maxFreqVal;
-                }
-                analyzeAndDisplay(analyzeAll);
-            };
-
-            fminSlider.oninput = () => {
-                const logVal = parseFloat(fminSlider.value);
-                fminValue.value = Math.exp(logVal).toFixed(2);
-                if (parseFloat(fmaxSlider.value) < logVal) {
-                    fmaxSlider.value = logVal;
-                    fmaxValue.value = Math.exp(logVal).toFixed(2);
-                }
-                updateAnalysisAfterFreqChange();
-            };
-            fmaxSlider.oninput = () => {
-                const logVal = parseFloat(fmaxSlider.value);
-                fmaxValue.value = Math.exp(logVal).toFixed(2);
-                if (logVal < parseFloat(fminSlider.value)) {
-                    fminSlider.value = logVal;
-                    fminValue.value = Math.exp(logVal).toFixed(2);
-                }
-                updateAnalysisAfterFreqChange();
-            };
-            fminValue.onchange = () => {
-                let val = parseFloat(fminValue.value);
-                if (isNaN(val) || val <= 0) val = 0.01;
-                if (val > maxFreq) val = maxFreq;
-                fminValue.value = val.toFixed(2);
-                fminSlider.value = Math.log(val);
-                updateAnalysisAfterFreqChange();
-            };
-            fmaxValue.onchange = () => {
-                let val = parseFloat(fmaxValue.value);
-                if (isNaN(val) || val < minFreq) val = minFreq;
-                if (val > maxFreq) val = maxFreq;
-                fmaxValue.value = val.toFixed(2);
-                fmaxSlider.value = Math.log(val);
-                updateAnalysisAfterFreqChange();
-            };
-            
-            fminGlobal.onchange = updateAnalysisAfterFreqChange;
-            fmaxGlobal.onchange = updateAnalysisAfterFreqChange;
-        }
-
-        function parseData(fileContent) {
-            const firstBrace = fileContent.indexOf('{');
-            const lastBrace = fileContent.lastIndexOf('}');
-            let startTime = null;
-            let jsonHeader = null;
-
-            if (firstBrace !== -1 && lastBrace !== -1) {
-                try {
-                    jsonHeader = JSON.parse(fileContent.substring(firstBrace, lastBrace + 1));
-                    if (jsonHeader["start time"]) startTime = new Date(jsonHeader["start time"]);
-                } catch (e) {
-                    console.error("Could not parse JSON header.", e);
-                    jsonHeader = null;
-                }
-            }
-
-            const datasets = [];
-            const blocks = fileContent.split('***');
-            blocks.forEach(block => {
-                if (!block.trim()) return;
-                const lines = block.split('\n');
-                const data = [];
-                let temperatures = [];
-                let isDataSection = false;
-                let R0 = NaN, esd_R0 = 0, firstTimeSec = NaN;
-
-                for (const line of lines) {
-                    const trimmedLine = line.trim();
-                    if (trimmedLine.startsWith('--- > R0 :')) {
-                        const r0_strings = trimmedLine.split(':')[1].trim().split(/\s+/);
-                        const r0_values = r0_strings.map(parseFloat).filter(v => !isNaN(v));
-                        if (r0_values.length > 0) {
-                            R0 = d3.mean(r0_values);
-                            const std_dev = d3.deviation(r0_values) || 0;
-                            esd_R0 = Math.max(std_dev, R0 * 100e-6);
-                        }
-                    }
-                    if (trimmedLine.startsWith('time /sec')) { isDataSection = true; continue; }
-                    if (trimmedLine.startsWith('--- > K and esd K')) { isDataSection = false; continue; }
-
-                    if (isDataSection) {
-                        const values = trimmedLine.split(/\s+/);
-                        if (values.length >= 11) {
-                            if (isNaN(firstTimeSec)) firstTimeSec = parseFloat(values[0]);
-                            const temp = parseFloat(values[1]);
-                            if (!isNaN(temp)) temperatures.push(temp);
-
-                            const freq = parseFloat(values[3]);
-                            const v3x = parseFloat(values[6]);
-                            const esdV3X = parseFloat(values[7]);
-                            const v3y = parseFloat(values[8]);
-                            const esdV3Y = parseFloat(values[9]);
-                            const isValid = parseFloat(values[10]) === 1;
-                            const current_peak_mA = parseFloat(values[2]);
-                            const current = (current_peak_mA * 1e-3) / Math.sqrt(2); // RMS current
-
-                            if (!isNaN(freq) && freq > 0 && !isNaN(v3x) && !isNaN(v3y) && !isNaN(current) && current > 0) {
-                                data.push({
-                                    freq, v3_in_phase: v3x, v3_out_of_phase: v3y,
-                                    esdV3X, esdV3Y, current,
-                                    ln_2omega: Math.log(2 * 2 * Math.PI * freq),
-                                    i_cubed: Math.pow(current, 3),
-                                    isValid
-                                });
-                            }
-                        }
-                    }
-                }
-                if (data.length > 0 && !isNaN(R0)) {
-                    let avg_temp = d3.mean(temperatures.filter(t => t > 0)) || NaN;
-                    let timestamp = (startTime && !isNaN(firstTimeSec)) ? new Date(startTime.getTime() + firstTimeSec * 1000) : new Date();
-                    datasets.push({ data, R0, esd_R0, timestamp, avg_temp });
-                }
-            });
-            return { datasets, jsonHeader };
-        }
-        
-        /**
-         * Solves V = q2*X2 - q1*X1 where X1=I^3*ln(2w) and X2=I^3
-         * using weighted multiple linear regression. This is non-iterative and robust.
-         * It uses column scaling to improve numerical stability.
-         */
-        function performScaledMLR(dataPoints, isRobust = false) {
-            
-            let points = dataPoints.map(p => ({
-                y: p.v3,
-                x1_raw: -p.i_cubed * p.ln_2omega,
-                x2_raw: p.i_cubed,
-                weight: p.weight
-            }));
-
-            // Calculate scaling factors (RMS of each column)
-            const n = points.length;
-            const s1 = Math.sqrt(points.reduce((sum, p) => sum + p.x1_raw * p.x1_raw, 0) / n);
-            const s2 = Math.sqrt(points.reduce((sum, p) => sum + p.x2_raw * p.x2_raw, 0) / n);
-            
-            if (s1 === 0 || s2 === 0) return { success: false, reason: "Data variation is zero." };
-            
-            // Apply scaling
-            points.forEach(p => {
-                p.x1 = p.x1_raw / s1;
-                p.x2 = p.x2_raw / s2;
-                p.robustWeight = p.weight;
-            });
-
-            let q_scaled = [0, 0], esd_q_scaled = [NaN, NaN];
-
-            for (let robust_iter = 0; robust_iter < (isRobust ? 10 : 1); robust_iter++) {
-                let XTWX = [[0, 0], [0, 0]]; // X'WX
-                let XTWY = [0, 0];       // X'WY
-
-                for (const p of points) {
-                    if (p.robustWeight === 0) continue;
-                    const w = p.robustWeight;
-                    XTWX[0][0] += p.x1 * p.x1 * w;
-                    XTWX[0][1] += p.x1 * p.x2 * w;
-                    XTWX[1][1] += p.x2 * p.x2 * w;
-                    XTWY[0] += p.x1 * p.y * w;
-                    XTWY[1] += p.x2 * p.y * w;
-                }
-                XTWX[1][0] = XTWX[0][1];
-
-                const det = XTWX[0][0] * XTWX[1][1] - XTWX[0][1] * XTWX[1][0];
-                if (Math.abs(det) < 1e-25) {
-                    return { success: false, reason: "Singular matrix: data may be collinear." };
-                }
-
-                const inv_det = 1 / det;
-                q_scaled[0] = inv_det * (XTWX[1][1] * XTWY[0] - XTWX[0][1] * XTWY[1]);
-                q_scaled[1] = inv_det * (-XTWX[1][0] * XTWY[0] + XTWX[0][0] * XTWY[1]);
-                
-                if (isRobust) {
-                    const residuals = points.map(p => p.y - (q_scaled[0]*p.x1 + q_scaled[1]*p.x2));
-                    const mad = d3.median(residuals.map(r => Math.abs(r - d3.median(residuals))));
-                    if (mad < 1e-12) break; 
-                    
-                    const c = 4.685;
-                    points.forEach((p, i) => {
-                        const u = Math.abs(residuals[i] / (c * mad));
-                        p.robustWeight = (u < 1) ? Math.pow(1 - u * u, 2) * p.weight : 0;
-                    });
-                }
-            }
-            
-            let XTWX_final = [[0, 0], [0, 0]];
-            for (const p of points) {
-                if (p.robustWeight === 0) continue;
-                const w = p.robustWeight;
-                XTWX_final[0][0] += p.x1 * p.x1 * w;
-                XTWX_final[0][1] += p.x1 * p.x2 * w;
-                XTWX_final[1][1] += p.x2 * p.x2 * w;
-            }
-            XTWX_final[1][0] = XTWX_final[0][1];
-
-            const det_final = XTWX_final[0][0] * XTWX_final[1][1] - XTWX_final[0][1] * XTWX_final[1][0];
-            if (Math.abs(det_final) > 1e-25) {
-                const inv_det = 1/det_final;
-                const var_q1_s = inv_det * XTWX_final[1][1];
-                const var_q2_s = inv_det * XTWX_final[0][0];
-                esd_q_scaled[0] = var_q1_s > 0 ? Math.sqrt(var_q1_s) : NaN;
-                esd_q_scaled[1] = var_q2_s > 0 ? Math.sqrt(var_q2_s) : NaN;
-            }
-
-            // Unscale parameters and errors
-            const q1 = q_scaled[0] / s1;
-            const q2 = q_scaled[1] / s2;
-            const esd_q1 = esd_q_scaled[0] / s1;
-            const esd_q2 = esd_q_scaled[1] / s2;
-
-            const success = !isNaN(q1) && !isNaN(q2) && !isNaN(esd_q1) && !isNaN(esd_q2);
-            return { q1, q2, esd_q1, esd_q2, success, reason: success ? "OK" : "Could not determine parameters." };
-        }
-
-
-        function analyzeAndDisplay(analyzeAll = false) {
-            document.body.style.cursor = 'wait';
-            setTimeout(() => {
-                if (analysisResults.length === 0) {
-                    document.body.style.cursor = 'default';
-                    return;
-                }
-                
-                const L = parseFloat(document.getElementById('wire-length').value) * 1e-3;
-                const esd_L_ppm = parseFloat(document.getElementById('esd-wire-length-ppm').value);
-                const rel_err_L_sq = Math.pow(esd_L_ppm / 1e6, 2);
-                const two_b = parseFloat(document.getElementById('wire-width').value) * 1e-3;
-                const esd_two_b_ppm = parseFloat(document.getElementById('esd-wire-width-ppm').value);
-                const rel_err_two_b_sq = Math.pow(esd_two_b_ppm / 1e6, 2);
-                const b = two_b / 2;
-                const C_min = 4;
-                const d_s = parseFloat(document.getElementById('thickness-substrate').value) * 1e-3;
-                const fitMethod = document.getElementById('fit-method').value;
-                const isRobust = fitMethod === 'robust';
-                const applyPhaseCorrection = document.getElementById('phase-shift-180').checked;
-                const phaseFactor = applyPhaseCorrection ? -1 : 1;
-                const eulerGamma = 0.5772156;
-                const MIN_ESD_V = 5E-9; 
-
-                const performAnalysisOnDataset = (result, fitRange) => {
-                    const C0 = parseFloat(document.getElementById('tcr-c0').value);
-                    const C1 = parseFloat(document.getElementById('tcr-c1').value);
-                    const C2 = parseFloat(document.getElementById('tcr-c2').value);
-
-                    let alpha_tcr = 0, R_at_T_val = result.R0;
-                    if (result.avg_temp > 0) {
-                        const temp = result.avg_temp;
-                        const dR_dT = 2 * C2 * temp + C1;
-                        R_at_T_val = C2 * temp * temp + C1 * temp + C0;
-                        if (R_at_T_val > 0) {
-                            alpha_tcr = (1 / R_at_T_val) * dR_dT;
-                        }
-                    }
-                    result.local_tcr = alpha_tcr;
-                    const rel_err_tcr_sq = 0;
-
-                    if (result.data && result.data.length > 0 && result.R0 > 0 && L > 0) {
-                        const maxCurrent = d3.max(result.data, d => d.current);
-                        result.maxPowerPerLength = (maxCurrent > 0) ? (result.R0 * maxCurrent * maxCurrent) / L : NaN;
-                    } else {
-                        result.maxPowerPerLength = NaN;
-                    }
-                    
-                    result.plotData = result.data
-                        .filter(d => d.isValid)
-                        .map(d => ({
-                            freq: d.freq,
-                            i_cubed: d.i_cubed,
-                            ln_2omega: d.ln_2omega,
-                            v3: d.v3_in_phase * phaseFactor,
-                            esdV3: Math.max(d.esdV3X, MIN_ESD_V),
-                        }));
-
-                    const dataForFit = result.plotData
-                        .filter(d => d.freq >= fitRange.min && d.freq <= fitRange.max)
-                        .map(d => ({ ...d, weight: d.esdV3 > 0 ? 1 / (d.esdV3 * d.esdV3) : 0 }));
-                    
-                    const uniqueFreqs = new Set(dataForFit.map(d => d.freq));
-                    const uniqueCurrents = new Set(dataForFit.map(d => d.i_cubed));
-                    if (dataForFit.length < 3 || uniqueFreqs.size < 2 || uniqueCurrents.size < 2) {
-                        result.fitParams = null;
-                        result.failReason = "Insufficient data variation (need at least 2 unique frequencies and currents).";
-                        return;
-                    }
-                    
-                    const fitResult = performScaledMLR(dataForFit, isRobust);
-
-                    let k = NaN, esd_k = NaN, alpha_diff = NaN, esd_alpha_diff = NaN;
-
-                    // Model is V = q2*(I^3) - q1*(I^3*ln(2w))
-                    // So p1 = q1 and p2 = q2/q1
-                    if (fitResult.success && fitResult.q1 > 0) {
-                        const { q1, q2, esd_q1, esd_q2 } = fitResult;
-                        
-                        const p1 = q1;
-                        const p2 = q2 / q1;
-                        
-                        const esd_p1 = esd_q1;
-                        const rel_err_q1_sq = Math.pow(esd_q1/q1, 2);
-                        const rel_err_q2_sq = Math.pow(esd_q2/q2, 2);
-                        const esd_p2 = (q1 !== 0 && q2 !== 0) ? Math.abs(p2) * Math.sqrt(rel_err_q1_sq + rel_err_q2_sq) : NaN;
-
-                        k = (R_at_T_val * R_at_T_val * alpha_tcr) / (4 * Math.PI * L * p1);
-                        const rel_err_R_sq = 4 * Math.pow(result.esd_R0 / R_at_T_val, 2);
-                        const rel_err_p1_sq = Math.pow(esd_p1 / p1, 2);
-                        esd_k = Math.abs(k) * Math.sqrt(rel_err_R_sq + rel_err_tcr_sq + rel_err_L_sq + rel_err_p1_sq);
-
-                        alpha_diff = (b * b * Math.exp(eulerGamma)) / 8 * Math.exp(p2);
-                        esd_alpha_diff = Math.abs(alpha_diff) * Math.sqrt(4 * rel_err_two_b_sq + Math.pow(esd_p2, 2));
-
-                        result.fitParams = { p1, p2 };
-                        result.failReason = null;
-                    } else {
-                         result.fitParams = null;
-                         result.failReason = fitResult.reason || "Fit failed. Check for negative thermal conductivity.";
-                    }
-                    
-                    result.k = k; result.esd_k = esd_k;
-                    result.alpha = alpha_diff * 1e6;
-                    result.esd_alpha = esd_alpha_diff * 1e6;
-                    
-                    const alpha_m2s_for_range = result.alpha / 1e6;
-                    if (alpha_m2s_for_range > 0) {
-                        result.f_min_linearity = (d_s > 0) ? (C_min * C_min * alpha_m2s_for_range) / (4 * Math.PI * d_s * d_s) : NaN;
-                        result.f_max_linearity = (b > 0) ? alpha_m2s_for_range / (Math.PI * b * b) : NaN;
-                    } else {
-                        result.f_min_linearity = NaN; result.f_max_linearity = NaN;
-                    }
-                };
-
-                if (analyzeAll) {
-                    analysisResults.forEach(result => {
-                        performAnalysisOnDataset(result, { min: result.minFitFreq, max: result.maxFitFreq });
-                    });
-                } else {
-                    const result = analysisResults[selectedDatasetIndex];
-                    if (result) {
-                        const minFitFreq = parseFloat(document.getElementById('fit-fmin').value);
-                        const maxFitFreq = parseFloat(document.getElementById('fit-fmax').value);
-                        result.minFitFreq = minFitFreq;
-                        result.maxFitFreq = maxFitFreq;
-                        performAnalysisOnDataset(result, { min: minFitFreq, max: maxFitFreq });
-                    }
-                }
-                
-                const avg_alpha_m2s = d3.mean(analysisResults.filter(d => !isNaN(d.alpha)), d => d.alpha / 1e6);
-                if (avg_alpha_m2s > 0) {
-                    parsedFileContent.global_f_min_linearity = (d_s > 0) ? (C_min * C_min * avg_alpha_m2s) / (4 * Math.PI * d_s * d_s) : NaN;
-                    parsedFileContent.global_f_max_linearity = (b > 0) ? avg_alpha_m2s / (Math.PI * b * b) : NaN;
-                }
-
-                renderResultsUI();
-                updateVisualization();
-                document.body.style.cursor = 'default';
-            }, 10);
-        }
-
-        function weightedPolynomialRegression2ndOrder(data) {
-            const pointsToFit = data.filter(d => d.sigma > 0 && !isNaN(d.y));
-            if (pointsToFit.length < 2) return { success: false, c0: 0, c1: 0, c2: 0 };
-            if (pointsToFit.length < 3) {
-                const fit = weightedLinearRegression(pointsToFit, 'x', 'y', 'sigma');
-                return { success: true, c0: fit.intercept, c1: fit.slope, c2: 0 };
-            }
-            let S_w = 0, S_wx = 0, S_wy = 0, S_wx2 = 0, S_wxy = 0, S_wx3 = 0, S_wx2y = 0, S_wx4 = 0;
-            for (const p of pointsToFit) {
-                const w = 1 / (p.sigma * p.sigma);
-                const wx = w * p.x; const wy = w * p.y; const wx2 = wx * p.x;
-                S_w += w; S_wx += wx; S_wy += wy; S_wx2 += wx2;
-                S_wxy += wx * p.y; S_wx3 += wx2 * p.x;
-                S_wx2y += wx2 * p.y; S_wx4 += wx2 * p.x * p.x;
-            }
-            const A = [ [S_w, S_wx, S_wx2], [S_wx, S_wx2, S_wx3], [S_wx2, S_wx3, S_wx4] ];
-            const B = [S_wy, S_wxy, S_wx2y];
-            const detA = A[0][0]*(A[1][1]*A[2][2] - A[1][2]*A[2][1]) - A[0][1]*(A[1][0]*A[2][2] - A[1][2]*A[2][0]) + A[0][2]*(A[1][0]*A[2][1] - A[1][1]*A[2][0]);
-            if (Math.abs(detA) < 1e-12) return { success: false, c0: 0, c1: 0, c2: 0 };
-            const detA0 = B[0]*(A[1][1]*A[2][2] - A[1][2]*A[2][1]) - A[0][1]*(B[1]*A[2][2] - A[1][2]*B[2]) + A[0][2]*(B[1]*A[2][1] - A[1][1]*B[2]);
-            const detA1 = A[0][0]*(B[1]*A[2][2] - A[1][2]*B[2]) - B[0]*(A[1][0]*A[2][2] - A[1][2]*A[2][0]) + A[0][2]*(A[1][0]*B[2] - B[1]*A[2][0]);
-            const detA2 = A[0][0]*(A[1][1]*B[2] - B[1]*A[2][1]) - A[0][1]*(A[1][0]*B[2] - B[1]*A[2][0]) + B[0]*(A[1][0]*A[2][1] - A[1][1]*A[2][0]);
-            return { success: true, c0: detA0 / detA, c1: detA1 / detA, c2: detA2 / detA };
-        }
-
-        function weightedLinearRegression(data, xKey, yKey, sigmaKey) {
-            const pointsToFit = data.filter(d => d[sigmaKey] > 0 && isFinite(d[sigmaKey]) && !isNaN(d[yKey]));
-            if (pointsToFit.length < 2) return { slope: NaN, intercept: NaN, esd_slope: NaN, esd_intercept: NaN };
-            let sum_w = 0, sum_wx = 0, sum_wy = 0, sum_wxy = 0, sum_wxx = 0;
-            for (const d of pointsToFit) {
-                const w = 1 / Math.pow(d[sigmaKey], 2);
-                sum_w += w; sum_wx += w * d[xKey]; sum_wy += w * d[yKey];
-                sum_wxy += w * d[xKey] * d[yKey]; sum_wxx += w * d[xKey] * d[xKey];
-            }
-            const delta = sum_w * sum_wxx - sum_wx * sum_wx;
-            if (delta === 0) return { slope: NaN, intercept: NaN, esd_slope: NaN, esd_intercept: NaN };
-            const slope = (sum_w * sum_wxy - sum_wx * sum_wy) / delta;
-            const intercept = (sum_wxx * sum_wy - sum_wx * sum_wxy) / delta;
-            return { slope, intercept, esd_slope: Math.sqrt(sum_w / delta), esd_intercept: Math.sqrt(sum_wxx / delta) };
-        }
-        
-        function formatTimestamp(d){return d.toISOString().slice(0,19).replace('T',' ')}
-        function updateFittingUI(){if(!analysisResults[selectedDatasetIndex])return;const {minFitFreq,maxFitFreq}=analysisResults[selectedDatasetIndex];document.getElementById('fit-fmin').value=minFitFreq.toFixed(2);document.getElementById('fit-fmax').value=maxFitFreq.toFixed(2);document.getElementById('fit-fmin-slider').value=Math.log(minFitFreq);document.getElementById('fit-fmax-slider').value=Math.log(maxFitFreq);}
-        function renderResultsUI(){const rrC=document.getElementById('recommended-fit-range-container'),rC=document.getElementById('results-container');rrC.innerHTML='';rC.innerHTML='';if(analysisResults.length===0)return;const f_min=parsedFileContent.global_f_min_linearity,f_max=parsedFileContent.global_f_max_linearity;if(!isNaN(f_min)&&!isNaN(f_max)){let h='<div class="results-card">';if(f_min<1e-6||f_max>1e11||f_min>=f_max){h+='<p>Recommended Fit Range: <strong>N/A</strong></p>'}else{const fd=f=>f>=1e3?`${(f/1e3).toFixed(2)} kHz`:`${f.toFixed(2)} Hz`;h+=`<p>Recommended Fit Range: <strong>${fd(Math.max(.001,f_min))} — ${fd(Math.min(1e6,f_max))}</strong></p>`}h+='</div>';rrC.innerHTML=h}const aT=document.createElement('h2');aT.textContent='Per-Dataset Analysis';rC.appendChild(aT);const cC=document.createElement('div');cC.id='dataset-controls';cC.className='control-group';const nav=document.createElement('div');nav.id='dataset-navigation';const pB=document.createElement('button');pB.id='prev-dataset-btn';pB.className='nav-btn';pB.innerHTML='▲';const nB=document.createElement('button');nB.id='next-dataset-btn';nB.className='nav-btn';nB.innerHTML='▼';nav.appendChild(pB);nav.appendChild(nB);const s=document.createElement('select');s.id='dataset-selector';analysisResults.forEach((r,i)=>{const o=document.createElement('option');o.value=i;const p=r.avg_temp>0?`${r.avg_temp.toFixed(2)} K: `:``;o.textContent=`${p}${formatTimestamp(r.timestamp)}`;if(i===selectedDatasetIndex)o.selected=true;s.appendChild(o)});pB.onclick=()=>{if(selectedDatasetIndex>0){selectedDatasetIndex--;s.value=selectedDatasetIndex;s.dispatchEvent(new Event('change'))}};nB.onclick=()=>{if(selectedDatasetIndex<analysisResults.length-1){selectedDatasetIndex++;s.value=selectedDatasetIndex;s.dispatchEvent(new Event('change'))}};s.addEventListener('change',e=>{selectedDatasetIndex=parseInt(e.target.value);isShowingRTPlot=false;updateFittingUI();displaySingleResult();updateVisualization()});const dB=document.createElement('button');dB.id='delete-dataset-btn';dB.innerHTML='&#x1F5D1;';dB.title="Delete Selected Dataset";dB.onclick=deleteSelectedDataset;cC.appendChild(nav);cC.appendChild(s);cC.appendChild(dB);rC.appendChild(cC);const caC=document.createElement('div');caC.id='single-result-card-container';rC.appendChild(caC);displaySingleResult()}
-        function displaySingleResult(){const cC=document.getElementById('single-result-card-container');if(!cC||analysisResults.length===0||!analysisResults[selectedDatasetIndex]){if(cC)cC.innerHTML='';return}const r=analysisResults[selectedDatasetIndex],f_s=r.fitParams!==null&&!isNaN(r.k),f_r=r.failReason||"";let a_t='<strong>...</strong>';if(f_s)a_t=`<strong>${r.alpha.toExponential(3)} ± ${r.esd_alpha.toExponential(1)} mm²/s</strong>`;let mPT='...';if(!isNaN(r.maxPowerPerLength))mPT=`<strong>${r.maxPowerPerLength.toFixed(2)} W/m</strong>`;cC.innerHTML=`<div class="results-card" style="${!f_s?'border-left-color: #ef4444;':''}">${!f_s?`<h3>Dataset: ${formatTimestamp(r.timestamp)} (FIT FAILED)</h3><p style="color: #dc2626; font-weight: bold;">${f_r}</p>`:`<h3>Dataset: ${formatTimestamp(r.timestamp)}</h3>`}<p>Avg Temperature: <strong>${r.avg_temp>0?r.avg_temp.toFixed(2)+' K':'N/A'}</strong></p><p>Resistance (R₀): <strong>${r.R0.toFixed(2)} ± ${r.esd_R0.toExponential(1)} Ω</strong></p><p>Local TCR (α): <strong>${!isNaN(r.local_tcr)?r.local_tcr.toExponential(2):'...'} 1/K</strong></p><p>Max Power: ${mPT}</p><p>Thermal Cond. (k): <strong>${f_s?r.k.toExponential(3)+' ± '+r.esd_k.toExponential(1):'...'} W/mK</strong></p><p>Thermal Diff. (α): ${a_t}</p></div>`}
-        function deleteSelectedDataset(){if(analysisResults.length===0)return;analysisResults.splice(selectedDatasetIndex,1);if(analysisResults.length===0){selectedDatasetIndex=0;document.getElementById('results-container').innerHTML='';document.getElementById('fitting-controls').classList.add('hidden');document.getElementById('save-report-btn').classList.add('hidden');clearPlot();return}selectedDatasetIndex=Math.max(0,selectedDatasetIndex-1);isShowingRTPlot=false;updateFittingUI();analyzeAndDisplay(true)}
-
-        function updateVisualization() {
-            if (isShowingRTPlot) {
-                drawRTPlot();
-            } else {
-                draw3DPlot();
-            }
-        }
-
-        const plotContainer = document.getElementById("plot-container");
-
-        function clearPlot() {
-            if (plotContainer) {
-                 try { Plotly.purge(plotContainer); } catch(e) {}
-                 plotContainer.innerHTML = ''; 
-            }
-        }
+// Reorthogonalized QR on column-scaled design; covariance is transformed back.
+function leastSquares(X,y,weights) {
+ const n=X.length,p=X[0]?.length||0;
+ if(n<p || !p || X.some(r=>r.some(v=>!finite(v))) || y.some(v=>!finite(v)) || weights.some(w=>!finite(w)||w<0)) throw Error('Invalid regression input.');
+ const scale=Array.from({length:p},(_,j)=>norm(X.map((r,i)=>r[j]*Math.sqrt(weights[i]))));
+ if(scale.some(s=>!(s>0))) throw Error('Insufficient independent data for this fit.');
+ const Q=[], R=Array.from({length:p},()=>Array(p).fill(0));
+ for(let j=0;j<p;j++) {
+  let v=X.map((r,i)=>r[j]*Math.sqrt(weights[i])/scale[j]);
+  for(let pass=0;pass<2;pass++) for(let k=0;k<j;k++) {const a=v.reduce((s,t,i)=>s+t*Q[k][i],0);R[k][j]+=a;v=v.map((t,i)=>t-a*Q[k][i]);}
+  R[j][j]=norm(v); if(R[j][j]<1e-10) throw Error('Fit is rank deficient or poorly conditioned.');
+  Q.push(v.map(t=>t/R[j][j]));
+ }
+ const solve=b=>{const z=Array(p).fill(0);for(let i=p-1;i>=0;i--)z[i]=(b[i]-R[i].reduce((s,v,j)=>s+(j>i?v*z[j]:0),0))/R[i][i];return z;};
+ const rhs=Q.map(q=>q.reduce((s,v,i)=>s+v*y[i]*Math.sqrt(weights[i]),0));
+ const beta=solve(rhs).map((v,j)=>v/scale[j]);
+ const inv=Array.from({length:p},(_,j)=>solve(Array.from({length:p},(_,i)=>+(i===j))));
+ const covariance=Array.from({length:p},(_,i)=>Array.from({length:p},(_,j)=>inv.reduce((s,col)=>s+col[i]*col[j],0)/scale[i]/scale[j]));
+ const residuals=y.map((v,i)=>v-X[i].reduce((s,t,j)=>s+t*beta[j],0));
+ return {beta,covariance,residuals};
+}
+function quadratic(a,C,b=a){return a.reduce((s,v,i)=>s+v*C[i].reduce((t,c,j)=>t+c*b[j],0),0);}
+function calibrate() {
+ const data=analysisResults.filter(d=>finite(d.avg_temp)&&d.avg_temp>0&&finite(d.R0)&&d.R0>0&&finite(d.esd_R0)&&d.esd_R0>0);
+ const unique=new Set(data.map(d=>d.avg_temp));
+ if(unique.size<2) throw Error('Automatic R(T) calibration needs at least two distinct temperatures. Enter coefficients and their uncertainties manually.');
+ const center=data.reduce((s,d)=>s+d.avg_temp,0)/data.length;
+ const scale=maxOf(data.map(d=>Math.abs(d.avg_temp-center)));
+ let order=unique.size>=3?2:1, fit;
+ const run=degree=>leastSquares(data.map(d=>{const z=(d.avg_temp-center)/scale;return degree===2?[1,z,z*z]:[1,z];}),data.map(d=>d.R0),data.map(d=>1/d.esd_R0**2));
+ try{fit=run(order);}catch(e){if(order!==2)throw e;order=1;fit=run(order);}
+ const dof=data.length-order-1, inflation=dof>0?Math.max(1,fit.residuals.reduce((s,r,i)=>s+(r/data[i].esd_R0)**2,0)/dof):1;
+ const C=fit.covariance.map(r=>r.map(v=>v*inflation));
+ const m=center,s=scale;
+ const A=order===2?[[1,-m/s,m*m/s**2],[0,1/s,-2*m/s**2],[0,0,1/s**2]]:[[1,-m/s],[0,1/s],[0,0]];
+ const coefficients=A.map(r=>r.reduce((a,v,j)=>a+v*fit.beta[j],0));
+ const covariance=A.map(r=>A.map(t=>quadratic(r,C,t)));
+ calibration={center,scale,beta:fit.beta,covariance:C,order,source:'Automatic '+(order===2?'quadratic':'linear')+' calibration',min:minOf(data.map(d=>d.avg_temp)),max:maxOf(data.map(d=>d.avg_temp))};
+ coefficients.forEach((v,i)=>{setNumericDisplay('tcr-c'+i,v);setNumericDisplay('tcr-s'+i,Math.sqrt(Math.max(0,covariance[i][i])),2);});
+ $('calibration-status').textContent=calibration.source+'; full coefficient covariance retained. Uncertainties are 1σ; temperature uncertainty is not included.';
+}
+function manualCalibration(){calibration=null;$('calibration-status').textContent='Manual calibration: enter 1σ coefficient uncertainties. Coefficients are treated as independent; zero means assumed exact.';analyzeAndDisplay(true);}
+// Plot only the observed positive temperature interval. Axis tick rounding must
+// never become input to the physical-property prediction validator.
+function resistanceCurvePoints(plotData) {
+ const temperatures=plotData.map(d=>d.x).filter(T=>finite(T)&&T>0);
+ if(!temperatures.length)return [];
+ const lo=minOf(temperatures),hi=maxOf(temperatures);
+ const coefficients=[0,1,2].map(i=>num('tcr-c'+i));
+ return Array.from({length:hi>lo?101:1},(_,i)=>{
+  const T=lo+(hi-lo)*i/100;
+  let R;
+  if(calibration){
+   const z=(T-calibration.center)/calibration.scale;
+   R=calibration.beta.reduceRight((sum,c)=>sum*z+c,0);
+  }else R=(coefficients[2]*T+coefficients[1])*T+coefficients[0];
+  return {T,R};
+ });
+}
+function predictResistance(T) {
+ if(!finite(T)||T<=0)throw Error('A valid positive temperature is required for R(T).');
+ let a,b,C,R,D;
+ if(calibration){const z=(T-calibration.center)/calibration.scale;a=calibration.order===2?[1,z,z*z]:[1,z];b=calibration.order===2?[0,1/calibration.scale,2*z/calibration.scale]:[0,1/calibration.scale];C=calibration.covariance;R=a.reduce((s,v,i)=>s+v*calibration.beta[i],0);D=b.reduce((s,v,i)=>s+v*calibration.beta[i],0);}
+ else{a=[1,T,T*T];b=[0,1,2*T];const c=[0,1,2].map(i=>num('tcr-c'+i)),sigma=[0,1,2].map(i=>num('tcr-s'+i));if(c.some(v=>!finite(v))||sigma.some(v=>!finite(v)||v<0))throw Error('Enter finite calibration coefficients and nonnegative uncertainties.');C=sigma.map((v,i)=>sigma.map((_,j)=>i===j?v*v:0));R=a.reduce((s,v,i)=>s+v*c[i],0);D=b.reduce((s,v,i)=>s+v*c[i],0);}
+ if(!(R>0)||!finite(R)||!finite(D))throw Error('Predicted resistance must be finite and positive.');
+ return {R,D,varR:Math.max(0,quadratic(a,C)),varD:Math.max(0,quadratic(b,C)),covRD:quadratic(a,C,b)};
+}
+function performScaledMLR(data,isRobust=false){
+ try {
+ const X=data.map(d=>[-d.i_cubed*d.ln_2omega,d.i_cubed]),y=data.map(d=>d.v3),base=data.map(d=>d.weight);
+ let weights=base.slice(),fit=leastSquares(X,y,weights),converged=!isRobust;
+ if(isRobust){for(let it=0;it<100;it++){
+ const z=fit.residuals.map((r,i)=>r*Math.sqrt(base[i])); const med=d3.median(z),mad=1.4826022185*d3.median(z.map(v=>Math.abs(v-med)));
+ const s=Math.max(1,mad); const next=base.map((w,i)=>{const u=z[i]/(4.685*s);return Math.abs(u)<1?w*(1-u*u)**2:0;});
+ const nextFit=leastSquares(X,y,next);const change=maxOf(next.map((w,i)=>Math.abs(w-weights[i])/base[i]));weights=next;fit=nextFit;if(change<1e-7){converged=true;break;}
+ }if(!converged)throw Error('Robust fit did not converge. Try WLS or revise the fit range.');}
+ const active=weights.filter(w=>w>0).length;if(active<=2)throw Error('At least three positively weighted observations are required.');
+ // Conditional weighted covariance, inflated for excess scatter. Robust errors are approximate.
+ const chi2=fit.residuals.reduce((s,r,i)=>s+r*r*weights[i],0),factor=Math.max(1,chi2/(active-2));
+ const covariance=fit.covariance.map(r=>r.map(v=>v*factor));
+ return {success:true,q1:fit.beta[0],q2:fit.beta[1],covariance,esd_q1:Math.sqrt(covariance[0][0]),esd_q2:Math.sqrt(covariance[1][1]),active};
+ }catch(e){return {success:false,reason:e.message};}
+}
+function resetResult(r){Object.assign(r,{fitParams:null,failReason:null,k:NaN,esd_k:NaN,alpha:NaN,esd_alpha:NaN,f_min_linearity:NaN,f_max_linearity:NaN,predictedR:NaN,esd_predictedR:NaN,local_tcr:NaN,maxPowerPerLength:NaN,esd_power:NaN});}
+function analyzeAndDisplay(){
+ if(exporting)return;
+ const L=num('wire-length')*1e-3,b=num('wire-width')*1e-3/2,ds=num('thickness-substrate')*1e-3;
+ const eL=num('esd-wire-length-ppm')/1e6,eb=num('esd-wire-width-ppm')/1e6;
+ const phase=$('phase-shift-180').checked?-1:1;
+ for(const r of analysisResults){resetResult(r);r.fitMethod=$('fit-method').value;
+ r.plotData=r.data.filter(d=>d.isValid).map(d=>({freq:d.freq,i_cubed:d.i_cubed,ln_2omega:d.ln_2omega,v3:d.v3_in_phase*phase,esdV3:Math.max(d.esdV3X,5e-9)}));
+ try{
+ if(![L,b,ds].every(v=>finite(v)&&v>0)||![eL,eb].every(v=>finite(v)&&v>=0))throw Error('Dimensions must be positive and uncertainties nonnegative.');
+ const p=predictResistance(r.avg_temp);r.predictedR=p.R;r.esd_predictedR=Math.sqrt(p.varR);r.local_tcr=p.D/p.R;
+ const current=d3.max(r.data.filter(d=>d.isValid),d=>d.current);r.maxPowerPerLength=p.R*current**2/L;r.esd_power=Math.abs(r.maxPowerPerLength)*Math.sqrt(p.varR/p.R**2+eL**2);
+ if(!finite(r.minFitFreq)||!finite(r.maxFitFreq)||r.minFitFreq<=0||r.minFitFreq>=r.maxFitFreq)throw Error('Minimum frequency must be positive and below maximum.');
+ const data=r.plotData.filter(d=>d.freq>=r.minFitFreq&&d.freq<=r.maxFitFreq).map(d=>({...d,weight:1/d.esdV3**2}));
+ if(data.length<3||new Set(data.map(d=>d.freq)).size<2)throw Error('Need at least three observations at two distinct frequencies.');
+ const fit=performScaledMLR(data,r.fitMethod==='robust');if(!fit.success)throw Error(fit.reason);
+ const {q1,q2,covariance:C}=fit;if(!finite(q1)||q1===0)throw Error('Thermal slope is zero or invalid.');
+ const p2=q2/q1,varP2=Math.max(0,quadratic([-q2/q1**2,1/q1],C));
+ const k=p.R*p.D/(4*Math.PI*L*q1);if(!finite(k)||k<=0)throw Error('Nonpositive conductivity: check calibration and phase correction.');
+ const varRD=Math.max(0,p.D**2*p.varR+p.R**2*p.varD+2*p.R*p.D*p.covRD);
+ const esdK=Math.sqrt(varRD/(4*Math.PI*L*q1)**2+k*k*(eL**2+C[0][0]/q1**2));
+ const alpha=b*b*Math.exp(0.5772156649015329)/8*Math.exp(p2)*1e6;
+ const esdAlpha=alpha*Math.sqrt(4*eb**2+varP2);
+ if(![alpha,esdAlpha,esdK].every(finite)||alpha<=0)throw Error('Derived properties overflow or are nonphysical; revise the fit.');
+ Object.assign(r,{fitParams:{p1:q1,p2},k,esd_k:esdK,alpha,esd_alpha:esdAlpha,f_min_linearity:16*(alpha/1e6)/(4*Math.PI*ds*ds),f_max_linearity:(alpha/1e6)/(Math.PI*b*b)});
+ }catch(e){r.failReason=e.message;}
+ }
+ const good=analysisResults.filter(r=>r.fitParams);
+ // Common interval is the intersection, not an average that may violate individual limits.
+ parsedFileContent.global_f_min_linearity=good.length?maxOf(good.map(r=>r.f_min_linearity)):NaN;
+ parsedFileContent.global_f_max_linearity=good.length?minOf(good.map(r=>r.f_max_linearity)):NaN;
+ renderResultsUI();updateVisualization();
+}
+function formatTimestamp(d){return d instanceof Date&&finite(d.getTime())?d.toISOString().slice(0,19).replace('T',' ')+' UTC':'Unavailable';}
+function updateFittingUI(){const r=analysisResults[selectedDatasetIndex];if(!r)return;for(const key of ['min','max']){setNumericDisplay('fit-f'+key,r[key+'FitFreq']);$('fit-f'+key+'-slider').value=Math.log(r[key+'FitFreq']);}}
+function renderResultsUI(){
+ const select=$('dataset-selector');select.replaceChildren();analysisResults.forEach((r,i)=>{const o=document.createElement('option');o.value=i;o.textContent=`${i+1}. ${finite(r.avg_temp)?r.avg_temp.toFixed(2)+' K':'Temperature N/A'} · ${formatTimestamp(r.timestamp)}`;select.append(o);});select.value=selectedDatasetIndex;
+ $('prev-dataset-btn').disabled=selectedDatasetIndex===0;$('next-dataset-btn').disabled=selectedDatasetIndex>=analysisResults.length-1;$('delete-dataset-btn').disabled=!analysisResults.length;
+ $('fitting-controls').classList.toggle('hidden',!analysisResults.length);$('save-report-btn').classList.toggle('hidden',!analysisResults.length);
+ const lo=parsedFileContent.global_f_min_linearity,hi=parsedFileContent.global_f_max_linearity;
+ $('recommended-fit-range-container').textContent=finite(lo)&&finite(hi)?lo<hi?`Common recommended range: ${compact(lo)}–${compact(hi)} Hz (successful datasets)`:'No common recommended frequency interval.':'Recommended frequency range unavailable.';
+ updateFittingUI();displaySingleResult();
+}
+function displaySingleResult(){const r=analysisResults[selectedDatasetIndex],c=$('single-result-card-container');c.replaceChildren();if(!r){c.textContent='Load an experimental data file to begin.';return;}const card=document.createElement('div');card.className='results-card';const rows=[r.fitParams?'Fit successful':'Fit failed: '+r.failReason,`Temperature: ${finite(r.avg_temp)?r.avg_temp.toFixed(2)+' K':'N/A'}`,`Measured R₀: ${fmt(r.R0)} ± ${fmt(r.esd_R0,1)} Ω`,`Predicted R(T): ${fmt(r.predictedR)} ± ${fmt(r.esd_predictedR,1)} Ω`,`Local TCR: ${fmt(r.local_tcr)} K⁻¹`,`Maximum power / length: ${fmt(r.maxPowerPerLength)} ± ${fmt(r.esd_power,1)} W/m`,`Conductivity: ${fmt(r.k)} ± ${fmt(r.esd_k,1)} W/(m·K)`,`Diffusivity: ${fmt(r.alpha)} ± ${fmt(r.esd_alpha,1)} mm²/s`,`Fit method: ${r.fitMethod}. Uncertainties: 1σ${r.fitMethod==='robust'?' (approximate conditional robust covariance)':''}.`];if(calibration&&(r.avg_temp<calibration.min||r.avg_temp>calibration.max))rows.push('Resistance prediction extrapolates beyond the calibration temperatures.');rows.forEach(t=>{const p=document.createElement('p');p.textContent=t;card.append(p);});c.append(card);}
+function deleteSelectedDataset(){if(exporting)return;analysisResults.splice(selectedDatasetIndex,1);parsedFileContent.datasets=analysisResults.map(r=>r);selectedDatasetIndex=Math.max(0,Math.min(selectedDatasetIndex,analysisResults.length-1));if(calibration){try{calibrate();}catch(e){calibration=null;[0,1,2].forEach(i=>{$('tcr-c'+i).value='';$('tcr-s'+i).value='';});$('calibration-status').textContent=e.message;}}analyzeAndDisplay();}
+function setupFittingSliders(){
+ const f=analysisResults.flatMap(r=>r.data.map(d=>d.freq)),lo=minOf(f),hi=maxOf(f);
+ for(const key of ['min','max']){const slider=$('fit-f'+key+'-slider'),input=$('fit-f'+key);slider.min=Math.log(lo);slider.max=Math.log(hi);slider.step=(Math.log(hi)-Math.log(lo))/200||0.01;input.min=lo;input.max=hi;input.step='any';
+ const update=v=>{if(!finite(v)||v<=0){showError('Enter a positive frequency.');updateFittingUI();return;}const targets=$('fit-f'+key+'-global').checked?analysisResults:[analysisResults[selectedDatasetIndex]];targets.filter(Boolean).forEach(r=>r[key+'FitFreq']=Math.max(lo,Math.min(hi,v)));analyzeAndDisplay();};
+ slider.oninput=()=>update(Math.exp(Number(slider.value)));input.onchange=()=>update(num(input.id));$('fit-f'+key+'-global').onchange=()=>{if($('fit-f'+key+'-global').checked)update(num(input.id));};}
+ updateFittingUI();
+}
+function parseData(text){
+ let jsonHeader=null,startTime=null;const first=text.indexOf('{');
+ if(first>=0){let depth=0,quoted=false,escape=false;for(let i=first;i<text.length;i++){const c=text[i];if(quoted){if(escape)escape=false;else if(c==='\\')escape=true;else if(c==='"')quoted=false;}else if(c==='"')quoted=true;else if(c==='{')depth++;else if(c==='}'&&--depth===0){try{jsonHeader=JSON.parse(text.slice(first,i+1));const t=new Date(jsonHeader['start time']);if(finite(t.getTime()))startTime=t;}catch(e){}break;}}}
+ const datasets=[];let skipped=0;
+ for(const block of text.split('***')){let active=false,R0=NaN,esd_R0=NaN,firstTime=null;const data=[],temps=[];
+ for(const line of block.split(/\r?\n/)){const t=line.trim();if(t.startsWith('--- > R0 :')){const vals=t.slice(t.indexOf(':')+1).trim().split(/\s+/).map(Number).filter(v=>finite(v)&&v>0);if(vals.length){R0=d3.mean(vals);esd_R0=Math.max(d3.deviation(vals)||0,R0*100e-6);}}
+ if(t.startsWith('time /sec')){active=true;continue;}if(t.startsWith('--- >')){active=false;continue;}if(!active||!t)continue;
+ const v=t.split(/\s+/).map(Number);if(v.length<11||![0,2,3,6,7,8,9,10].every(i=>finite(v[i]))||v[2]<=0||v[3]<=0||v[7]<0||v[9]<0){skipped++;continue;}
+ const current=v[2]*1e-3/Math.sqrt(2),i_cubed=current**3;if(!finite(i_cubed)||i_cubed<=0){skipped++;continue;}
+ if(firstTime===null)firstTime=v[0];if(v[10]===1&&finite(v[1])&&v[1]>0)temps.push(v[1]);
+ data.push({freq:v[3],current,i_cubed,ln_2omega:Math.log(4*Math.PI*v[3]),v3_in_phase:v[6],v3_out_of_phase:v[8],esdV3X:v[7],esdV3Y:v[9],isValid:v[10]===1});
+ }
+ if(data.length&&finite(R0))datasets.push({data,R0,esd_R0,avg_temp:d3.mean(temps)??NaN,timestamp:startTime&&firstTime!==null?new Date(startTime.getTime()+firstTime*1000):null});
+ }return {datasets,jsonHeader,skipped};
+}
+async function handleFileSelect(e){const file=e.target.files[0];if(!file||exporting)return;const seq=++loadSequence;document.body.style.cursor='wait';try{const parsed=parseData(await file.text());if(seq!==loadSequence)return;if(!parsed.datasets.length)throw Error('No valid datasets found; existing data retained.');parsedFileContent=parsed;const freqs=parsed.datasets.flatMap(r=>r.data.map(d=>d.freq)),lo=minOf(freqs),hi=maxOf(freqs);analysisResults=parsed.datasets.map(r=>({...r,minFitFreq:lo,maxFitFreq:hi}));selectedDatasetIndex=0;calibration=null;[0,1,2].forEach(i=>{$('tcr-c'+i).value='';$('tcr-s'+i).value='';});try{calibrate();}catch(err){$('calibration-status').textContent=err.message;}setupFittingSliders();$('file-name-display').textContent=file.name;$('data-status').textContent=`${analysisResults.length} datasets loaded. ${parsed.skipped} malformed rows skipped. Current input: peak mA; voltage: V. Missing timestamps remain unavailable.`;analyzeAndDisplay();if(parsed.skipped)showError(`${parsed.skipped} malformed rows excluded.`);}catch(err){showError(err.message);}finally{if(seq===loadSequence)document.body.style.cursor='default';e.target.value='';}}
+function updateVisualization(){try{if(isShowingRTPlot){drawRTPlot();plotReady=Promise.resolve();}else plotReady=Promise.resolve(draw3DPlot());plotReady.catch(e=>showError('Plot error: '+e.message));}catch(e){showError('Plot error: '+e.message);plotReady=Promise.resolve();}}
+function clearPlot(){if(window.Plotly)Plotly.purge(plotContainer);plotContainer.replaceChildren();}
 
         function draw3DPlot() {
             clearPlot();
@@ -976,8 +608,8 @@
                 const ln_2omega_range = d3.extent(dataInRange, d => d.ln_2omega);
                 const i_cubed_range = d3.extent(dataInRange, d => d.i_cubed);
                 
-                const surface_x = d3.range(ln_2omega_range[0], ln_2omega_range[1] + 1e-9, (ln_2omega_range[1]-ln_2omega_range[0])/20 || 1);
-                const surface_y = d3.range(i_cubed_range[0], i_cubed_range[1] + 1e-9, (i_cubed_range[1]-i_cubed_range[0])/20 || 1);
+                const surface_x = Array.from({length:21},(_,i)=>ln_2omega_range[0]+i*(ln_2omega_range[1]-ln_2omega_range[0])/20);
+                const surface_y = Array.from({length:21},(_,i)=>i_cubed_range[0]+i*(i_cubed_range[1]-i_cubed_range[0])/20);
                 
                 const surface_z = surface_y.map(y_val => {
                     return surface_x.map(x_val => p1 * y_val * (p2 - x_val));
@@ -994,7 +626,7 @@
                     reversescale: true,
                     showscale: false
                 };
-                plotTraces.push(surfaceTrace);
+                if(i_cubed_range[0]===i_cubed_range[1]) plotTraces.push({type:'scatter3d',mode:'lines',name:'Fit',x:surface_x,y:surface_x.map(()=>i_cubed_range[0]),z:surface_x.map(x=>p1*i_cubed_range[0]*(p2-x)),line:{color:'#2563eb',width:5}}); else plotTraces.push(surfaceTrace);
             }
             
             const layout = {
@@ -1009,7 +641,7 @@
                 legend: { x: 0.8, y: 0.95 }
             };
             
-            Plotly.newPlot(plotContainer, plotTraces, layout, {responsive: true});
+            return Plotly.newPlot(plotContainer, plotTraces, layout, {responsive: true});
         }
 
 
@@ -1037,9 +669,9 @@
             const plotHeight = height - plot_margin.top - plot_margin.bottom;
             
             let xExtent = d3.extent(plotData, d => d.x);
-            let yExtent = d3.extent(plotData, d => d.y);
+            let yExtent = [d3.min(plotData,d=>d.y-d.sigma), d3.max(plotData,d=>d.y+d.sigma)];
             
-            if (plotData.length === 1) {
+            if (xExtent[0] === xExtent[1]) {
                 xExtent = [xExtent[0] - 1, xExtent[0] + 1];
                 yExtent = [yExtent[0] - yExtent[0]*0.1, yExtent[0] + yExtent[0]*0.1];
             }
@@ -1067,8 +699,11 @@
             const C2 = parseFloat(document.getElementById('tcr-c2').value);
 
             if (![C0, C1, C2].some(isNaN)) {
-                const curve_points = d3.range(xScale.domain()[0], xScale.domain()[1], (xScale.domain()[1] - xScale.domain()[0]) / 100);
-                const line = d3.line().x(d => xScale(d)).y(d => yScale(C2 * d * d + C1 * d + C0));
+                const curve_points = resistanceCurvePoints(plotData);
+                const line = d3.line()
+                    .defined(d => finite(d.R) && d.R > 0)
+                    .x(d => xScale(d.T))
+                    .y(d => yScale(d.R));
                 plotArea.append("path").datum(curve_points).attr("class", "rt-fit-line").attr("d", line);
             }
         }
@@ -1105,13 +740,13 @@ function drawSummaryPlot(data, container) {
                 .append("g")
                 .attr("transform", `translate(${plotMargin.left},${plotMargin.top})`);
             
-            const validData = data.filter(d => !isNaN(d.k) && !isNaN(d.alpha) && d.fitParams);
+            const validData = data.map((d,i)=>({...d, datasetNumber:i+1})).filter(d => Number.isFinite(d.k) && Number.isFinite(d.alpha) && d.fitParams);
             if (validData.length === 0) return;
 
-            const xScale = d3.scalePoint().domain(validData.map((d, i) => i + 1)).range([0, width]).padding(0.5);
+            const xScale = d3.scalePoint().domain(validData.map(d => d.datasetNumber)).range([0, width]).padding(0.5);
             
-            const kExtent = d3.extent(validData, d => d.k);
-            const alphaExtent = d3.extent(validData, d => d.alpha);
+            const kExtent = [d3.min(validData,d=>d.k-d.esd_k),d3.max(validData,d=>d.k+d.esd_k)];
+            const alphaExtent = [d3.min(validData,d=>d.alpha-d.esd_alpha),d3.max(validData,d=>d.alpha+d.esd_alpha)];
 
             const y1Scale = d3.scaleLinear().domain([kExtent[0] * 0.9, kExtent[1] * 1.1]).range([height, 0]).nice();
             const y2Scale = d3.scaleLinear().domain([alphaExtent[0] * 0.9, alphaExtent[1] * 1.1]).range([height, 0]).nice();
@@ -1127,9 +762,12 @@ function drawSummaryPlot(data, container) {
             svg.append("text").attr("text-anchor", "middle").attr("transform", "rotate(90)").attr("y", -width - plotMargin.right + 40).attr("x", height / 2).text("Thermal Diffusivity (α) [mm²/s]").style("fill", "#B45309");
             svg.append("text").attr("text-anchor", "middle").attr("x", width / 2).attr("y", -15).text("Summary of Results").style("font-size", "16px").style("font-weight", "bold");
             
+            for (const [key,error,scale,color] of [['k','esd_k',y1Scale,'#1E40AF'],['alpha','esd_alpha',y2Scale,'#B45309']]) {
+                svg.append('g').selectAll('line').data(validData).enter().append('line').attr('x1',d=>xScale(d.datasetNumber)).attr('x2',d=>xScale(d.datasetNumber)).attr('y1',d=>scale(d[key]-d[error])).attr('y2',d=>scale(d[key]+d[error])).attr('stroke',color);
+            }
             // Data points and error bars
-            svg.selectAll(".dot-k").data(validData).enter().append("circle").attr("cx", (d, i) => xScale(i + 1)).attr("cy", d => y1Scale(d.k)).attr("r", 5).style("fill", "#1E40AF");
-            svg.selectAll(".dot-alpha").data(validData).enter().append("circle").attr("cx", (d, i) => xScale(i + 1)).attr("cy", d => y2Scale(d.alpha)).attr("r", 5).style("fill", "#B45309");
+            svg.selectAll(".dot-k").data(validData).enter().append("circle").attr("cx", (d, i) => xScale(d.datasetNumber)).attr("cy", d => y1Scale(d.k)).attr("r", 5).style("fill", "#1E40AF");
+            svg.selectAll(".dot-alpha").data(validData).enter().append("circle").attr("cx", (d, i) => xScale(d.datasetNumber)).attr("cy", d => y2Scale(d.alpha)).attr("r", 5).style("fill", "#B45309");
         }
 
         function drawRvTPlot(data, container) {
@@ -1147,10 +785,10 @@ function drawSummaryPlot(data, container) {
             const plotHeight = height - margin.top - margin.bottom;
             
             const xExtent = d3.extent(plotData, d => d.x);
-            const yExtent = d3.extent(plotData, d => d.y);
+            const yExtent = [d3.min(plotData,d=>d.y-d.sigma), d3.max(plotData,d=>d.y+d.sigma)];
             const yPadding = (yExtent[1] - yExtent[0]) * 0.1 || Math.abs(yExtent[0] * 0.1) || 1;
 
-            const xScale = d3.scaleLinear().domain([xExtent[0] - 5, xExtent[1] + 5]).range([0, plotWidth]).nice();
+            const xScale = d3.scaleLinear().domain([Math.max(0.001,xExtent[0] - 5), xExtent[1] + 5]).range([0, plotWidth]).nice();
             const yScale = d3.scaleLinear().domain([yExtent[0] - yPadding, yExtent[1] + yPadding]).range([plotHeight, 0]).nice();
 
             plotArea.append("g").attr("class", "axis").attr("transform", `translate(0,${plotHeight})`).call(d3.axisBottom(xScale));
@@ -1168,14 +806,17 @@ function drawSummaryPlot(data, container) {
             const C2 = parseFloat(document.getElementById('tcr-c2').value);
 
             if (![C0, C1, C2].some(isNaN)) {
-                const curve_points = d3.range(xScale.domain()[0], xScale.domain()[1], (xScale.domain()[1] - xScale.domain()[0]) / 100);
-                const line = d3.line().x(d => xScale(d)).y(d => yScale(C2 * d * d + C1 * d + C0));
+                const curve_points = resistanceCurvePoints(plotData);
+                const line = d3.line()
+                    .defined(d => finite(d.R) && d.R > 0)
+                    .x(d => xScale(d.T))
+                    .y(d => yScale(d.R));
                 plotArea.append("path").datum(curve_points).attr("class", "rt-fit-line").attr("d", line);
             }
         }
 
         function drawConductivityVsTempPlot(data, container) {
-            const plotData = data.map(d => ({ x: d.avg_temp, y: d.k, sigma: d.esd_k })).filter(d => d.x > 0 && !isNaN(d.y));
+            const plotData = data.filter(d=>d.fitParams).map(d => ({ x: d.avg_temp, y: d.k, sigma: d.esd_k })).filter(d => d.x > 0 && !isNaN(d.y));
             if (plotData.length < 1) return;
 
             container.html('');
@@ -1189,11 +830,11 @@ function drawSummaryPlot(data, container) {
             const plotHeight = height - margin.top - margin.bottom;
 
             const xExtent = d3.extent(plotData, d => d.x);
-            const yExtent = d3.extent(plotData, d => d.y);
+            const yExtent = [d3.min(plotData,d=>d.y-d.sigma), d3.max(plotData,d=>d.y+d.sigma)];
             const yPadding = (yExtent[1] - yExtent[0]) * 0.1 || Math.abs(yExtent[0] * 0.1) || 1;
 
-            const xScale = d3.scaleLinear().domain([xExtent[0] - 5, xExtent[1] + 5]).range([0, plotWidth]).nice();
-            const yScale = d3.scaleLinear().domain([0, yExtent[1] + yPadding]).range([plotHeight, 0]).nice();
+            const xScale = d3.scaleLinear().domain([Math.max(0.001,xExtent[0] - 5), xExtent[1] + 5]).range([0, plotWidth]).nice();
+            const yScale = d3.scaleLinear().domain([Math.min(0,yExtent[0]-yPadding), yExtent[1] + yPadding]).range([plotHeight, 0]).nice();
             
             plotArea.append("g").attr("class", "axis").attr("transform", `translate(0,${plotHeight})`).call(d3.axisBottom(xScale));
             plotArea.append("g").attr("class", "axis").call(d3.axisLeft(yScale));
@@ -1207,7 +848,7 @@ function drawSummaryPlot(data, container) {
         }
 
         function drawDiffusivityVsTempPlot(data, container) {
-            const plotData = data.map(d => ({ x: d.avg_temp, y: d.alpha, sigma: d.esd_alpha })).filter(d => d.x > 0 && !isNaN(d.y));
+            const plotData = data.filter(d=>d.fitParams).map(d => ({ x: d.avg_temp, y: d.alpha, sigma: d.esd_alpha })).filter(d => d.x > 0 && !isNaN(d.y));
             if (plotData.length < 1) return;
 
             container.html('');
@@ -1221,11 +862,11 @@ function drawSummaryPlot(data, container) {
             const plotHeight = height - margin.top - margin.bottom;
 
             const xExtent = d3.extent(plotData, d => d.x);
-            const yExtent = d3.extent(plotData, d => d.y);
+            const yExtent = [d3.min(plotData,d=>d.y-d.sigma), d3.max(plotData,d=>d.y+d.sigma)];
             const yPadding = (yExtent[1] - yExtent[0]) * 0.1 || Math.abs(yExtent[0] * 0.1) || 1;
 
-            const xScale = d3.scaleLinear().domain([xExtent[0] - 5, xExtent[1] + 5]).range([0, plotWidth]).nice();
-            const yScale = d3.scaleLinear().domain([0, yExtent[1] + yPadding]).range([plotHeight, 0]).nice();
+            const xScale = d3.scaleLinear().domain([Math.max(0.001,xExtent[0] - 5), xExtent[1] + 5]).range([0, plotWidth]).nice();
+            const yScale = d3.scaleLinear().domain([Math.min(0,yExtent[0]-yPadding), yExtent[1] + yPadding]).range([plotHeight, 0]).nice();
             
             plotArea.append("g").attr("class", "axis").attr("transform", `translate(0,${plotHeight})`).call(d3.axisBottom(xScale));
             plotArea.append("g").attr("class", "axis").call(d3.axisLeft(yScale));
@@ -1238,259 +879,60 @@ function drawSummaryPlot(data, container) {
             plotArea.append("g").selectAll("circle").data(plotData).enter().append("circle").attr("class", "rt-data-point").attr("cx", d => xScale(d.x)).attr("cy", d => yScale(d.y)).attr("r", 4);
         }
 
-async function exportPDFReport() {
-            // --- Make cursor busy ---
-            document.body.style.cursor = 'wait';
 
-            const btn = document.getElementById('save-report-btn');
-            btn.textContent = 'Generating...';
-            btn.disabled = true;
+async function exportPDFReport(){
+ if(exporting||!analysisResults.length)return;
+ if(!window.jspdf||!window.html2canvas){showError('PDF libraries are unavailable. Check your connection and reload.');return;}
+ const original=selectedDatasetIndex,originalView=isShowingRTPlot;
+ exporting=true; const controls=[...document.querySelectorAll('#controls-panel input,#controls-panel button,#controls-panel select')];const disabled=controls.map(e=>e.disabled);controls.forEach(e=>e.disabled=true);$('save-report-btn').textContent='Generating…';document.body.style.cursor='wait';
+ const temp=d3.select('#pdf-plot-temp-container');
+ try{
+ const pdf=new window.jspdf.jsPDF({unit:'mm',format:'a4'});let y=20;
+ const line=(text,size=10)=>{pdf.setFontSize(size);const lines=pdf.splitTextToSize(sanitizeForPDF(String(text)).replace(/²/g,'2').replace(/σ/g,'sigma').replace(/⁻¹/g,'^-1').replace(/·/g,' '),180);for(const l of lines){if(y>277){pdf.addPage();y=20;}pdf.text(l,15,y);y+=size*.45+2;}};
+ const page=title=>{pdf.addPage();y=20;line(title,16);y+=4;};
+ line('3-Omega Analysis Report',20);line('Version 4.0.2 | 13 September 2026');line('File: '+$('file-name-display').textContent);line('Generated: '+new Date().toISOString());
+ line('Resistance source: '+(calibration?calibration.source:'Manual coefficients (independent uncertainties)'));
+ line('All errors are 1 sigma. Predicted resistance and derivative covariance are propagated into conductivity. Calibration and voltage-fit errors are assumed independent. Current, temperature and model systematics are not included. Robust errors are approximate conditional weighted errors, inflated for excess scatter.');
+ line('Phase correction: '+($('phase-shift-180').checked?'180 degrees':'none'));
+ line('Geometry: L='+num('wire-length')+' mm (+/- '+num('esd-wire-length-ppm')+' ppm); width='+num('wire-width')+' mm (+/- '+num('esd-wire-width-ppm')+' ppm); substrate='+num('thickness-substrate')+' mm.');
+ for(let i=0;i<3;i++)line(`C${i}: ${$('tcr-c'+i).value} +/- ${$('tcr-s'+i).value}`);
+ if(calibration){line('Centered calibration (rounded display): z=(T-'+compact(calibration.center)+')/'+compact(calibration.scale));line('Coefficients [1,z,z²]: '+calibration.beta.map(v=>compact(v)).join(', '));line('Covariance (rounded display): '+calibration.covariance.map(row=>'['+row.map(v=>compact(v,3)).join(', ')+']').join(' '));}
+ line('Original file header:',12);line(JSON.stringify(parsedFileContent.jsonHeader,null,2)||'Unavailable');
+ page('Summary');
+ analysisResults.forEach((r,i)=>{line(`Dataset ${i+1}: ${finite(r.avg_temp)?r.avg_temp.toFixed(2)+' K':'Temperature unavailable'}`,11);line(r.fitParams?`k = ${fmt(r.k)} +/- ${fmt(r.esd_k,1)} W/mK; diffusivity = ${fmt(r.alpha)} +/- ${fmt(r.esd_alpha,1)} mm2/s`:'FIT FAILED: '+r.failReason);});
+ for(let i=0;i<analysisResults.length;i++){
+ const r=analysisResults[i];page(`Dataset ${i+1}: ${formatTimestamp(r.timestamp)}`);
+ line(`Temperature: ${finite(r.avg_temp)?r.avg_temp.toFixed(3)+' K':'Unavailable'}`);
+ line(`Measured R0: ${fmt(r.R0)} +/- ${fmt(r.esd_R0,1)} Ohm`);
+ line(`Predicted R(T): ${fmt(r.predictedR)} +/- ${fmt(r.esd_predictedR,1)} Ohm`);
+ line(`Local TCR: ${fmt(r.local_tcr)} /K`);
+ line(`Maximum power per length: ${fmt(r.maxPowerPerLength)} +/- ${fmt(r.esd_power,1)} W/m`);
+ line(`Fit: ${r.fitMethod}; frequency range: ${compact(r.minFitFreq)} to ${compact(r.maxFitFreq)} Hz`);
+ if(r.fitParams){line(`Conductivity: ${fmt(r.k)} +/- ${fmt(r.esd_k,1)} W/mK`);line(`Diffusivity: ${fmt(r.alpha)} +/- ${fmt(r.esd_alpha,1)} mm2/s`);line(`Recommended range: ${compact(r.f_min_linearity)} to ${compact(r.f_max_linearity)} Hz`);}else line('FIT FAILED: '+r.failReason);
+ selectedDatasetIndex=i;isShowingRTPlot=false;updateVisualization();await plotReady;
+ if(r.plotData?.length){const image=await Plotly.toImage(plotContainer,{format:'png',width:1000,height:750});if(y+135>280){pdf.addPage();y=20;}pdf.addImage(image,'PNG',15,y,180,135);}else line('No valid observations to plot.');
+ }
+ const charts=[['Result summary',drawSummaryPlot],['Measured resistance and calibration',drawRvTPlot],['Conductivity vs temperature',drawConductivityVsTempPlot],['Diffusivity vs temperature',drawDiffusivityVsTempPlot]];
+ for(const [title,draw] of charts){temp.html('');draw(analysisResults,temp);if(!temp.select('svg').node())continue;await new Promise(requestAnimationFrame);const canvas=await html2canvas(temp.node(),{scale:2,backgroundColor:'#ffffff'});page(title);pdf.addImage(canvas.toDataURL('image/png'),'PNG',15,y,180,90);}
+ pdf.save('3omega-v4.0.2-report-'+new Date().toISOString().replace(/[:.]/g,'-')+'.pdf');
+ }catch(e){console.error(e);showError('Report generation failed: '+e.message);}finally{selectedDatasetIndex=original;isShowingRTPlot=originalView;temp.html('');exporting=false;controls.forEach((e,i)=>e.disabled=disabled[i]);$('save-report-btn').textContent='Save Report';document.body.style.cursor='default';renderResultsUI();updateVisualization();}
+}
+$('file-upload').addEventListener('change',handleFileSelect);
+['wire-length','esd-wire-length-ppm','wire-width','esd-wire-width-ppm','thickness-substrate','phase-shift-180','fit-method'].forEach(id=>$(id).addEventListener('change',analyzeAndDisplay));
+[0,1,2].forEach(i=>{ $('tcr-c'+i).addEventListener('change',manualCalibration);$('tcr-s'+i).addEventListener('change',manualCalibration); });
+$('refit-resistance').onclick=()=>{try{calibrate();analyzeAndDisplay();}catch(e){showError(e.message);}};
+$('dataset-selector').onchange=()=>{selectedDatasetIndex=Number($('dataset-selector').value);renderResultsUI();updateVisualization();};
+$('prev-dataset-btn').onclick=()=>{selectedDatasetIndex=Math.max(0,selectedDatasetIndex-1);renderResultsUI();updateVisualization();};
+$('next-dataset-btn').onclick=()=>{selectedDatasetIndex=Math.min(analysisResults.length-1,selectedDatasetIndex+1);renderResultsUI();updateVisualization();};
+$('delete-dataset-btn').onclick=deleteSelectedDataset;$('save-report-btn').onclick=exportPDFReport;
+const resizer=$('drag-handle'),panel=$('controls-panel');let resizing=false;
+resizer.onpointerdown=e=>{resizing=true;resizer.setPointerCapture(e.pointerId);e.preventDefault();};
+resizer.onpointermove=e=>{if(resizing){panel.style.width=Math.max(430,Math.min(760,e.clientX))+'px';}};resizer.onpointerup=()=>resizing=false;resizer.onpointercancel=()=>resizing=false;
+let resizeTimer;new ResizeObserver(()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(()=>{if(exporting)return;if(isShowingRTPlot)updateVisualization();else if(plotContainer.data&&window.Plotly)Plotly.Plots.resize(plotContainer);},100);}).observe(plotContainer);
+if(!window.d3||!window.Plotly){showError('Chart libraries failed to load. Connect to the internet and reload this file.');$('file-upload').disabled=true;}
+renderResultsUI();
+});
 
-            const originalSelectedDatasetIndex = selectedDatasetIndex;
-            const tempPlotContainer = d3.select("#pdf-plot-temp-container");
-
-            try {
-                const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-                const pageWidth = pdf.internal.pageSize.getWidth();
-                const pageHeight = pdf.internal.pageSize.getHeight();
-                const margin = 15;
-                let yPos = margin;
-
-                pdf.setFontSize(20).text("3-Omega Analysis Report", pageWidth / 2, yPos, { align: 'center' });
-                yPos += 10;
-
-                let sampleName = 'N/A';
-                const header = parsedFileContent.jsonHeader;
-                if (header) {
-                    sampleName = header.exp?.Sample || header.exp?.sample || header.Sample || header['sample name'] || 'N/A';
-                }
-
-                const startTime = analysisResults.length > 0 ? analysisResults[0].timestamp : null;
-                const endTime = analysisResults.length > 0 ? analysisResults[analysisResults.length - 1].timestamp : null;
-                const measurementDateString = (startTime && endTime) 
-                    ? `${formatTimestamp(startTime)} to ${formatTimestamp(endTime)}`
-                    : 'Not available';
-
-                pdf.setFontSize(12).text(`Sample: ${sampleName}`, pageWidth / 2, yPos, { align: 'center' });
-                yPos += 7;
-                pdf.setFontSize(12).text(`Data measured: ${measurementDateString}`, pageWidth / 2, yPos, { align: 'center' });
-                yPos += 7;
-
-                pdf.setFontSize(10).text(`Report generated: ${new Date().toLocaleString()}`, pageWidth / 2, yPos, { align: 'center' });
-                yPos += 12;
-
-                pdf.setFontSize(10).text("Data File Header Information", margin, yPos);
-                yPos += 6;
-                pdf.setLineWidth(0.2).line(margin, yPos, pageWidth - margin, yPos);
-                yPos += 8;
-                pdf.setFontSize(8).setFont('courier');
-                if (parsedFileContent.jsonHeader) {
-                    const headerString = JSON.stringify(parsedFileContent.jsonHeader, null, 2);
-                    const headerLines = pdf.splitTextToSize(headerString, pageWidth - 2 * margin);
-                    for (const line of headerLines) {
-                        if (yPos > pageHeight - margin) { pdf.addPage(); yPos = margin; }
-                        pdf.text(line, margin, yPos);
-                        yPos += 4;
-                    }
-                } else {
-                    pdf.text("No JSON header found.", margin, yPos);
-                }
-                pdf.setFont('helvetica').setFontSize(10);
-                
-                pdf.addPage();
-                yPos = margin;
-                pdf.setFontSize(16).text("Summary Table", pageWidth / 2, yPos, { align: 'center' });
-                yPos += 12;
-                pdf.setFontSize(9).setFont('courier', 'bold');
-
-                const col_positions = [margin, 50, 95, 145];
-                pdf.text("Temp (K)", col_positions[0], yPos);
-                pdf.text("R0 (Ohm)", col_positions[1], yPos);
-                pdf.text("k (W/mK)", col_positions[2], yPos);
-                pdf.text("alpha (mm2/s)", col_positions[3], yPos);
-                yPos += 2;
-                pdf.setLineWidth(0.3).line(margin, yPos, pageWidth - margin, yPos);
-                yPos += 5;
-                pdf.setFont('courier', 'normal');
-
-                analysisResults.forEach(res => {
-                    if (yPos > pageHeight - margin - 10) { pdf.addPage(); yPos = margin; }
-                    const temp_str = res.avg_temp > 0 ? res.avg_temp.toFixed(2) : 'N/A';
-                    const R0_str = `${res.R0.toFixed(3)} +/- ${res.esd_R0.toExponential(1)}`;
-                    const k_str = !isNaN(res.k) ? `${res.k.toExponential(2)} +/- ${res.esd_k.toExponential(1)}` : 'N/A';
-                    const alpha_str = !isNaN(res.alpha) ? `${res.alpha.toExponential(2)} +/- ${res.esd_alpha.toExponential(1)}` : 'N/A';
-                    
-                    pdf.text(temp_str, col_positions[0], yPos);
-                    pdf.text(R0_str, col_positions[1], yPos);
-                    pdf.text(k_str, col_positions[2], yPos);
-                    pdf.text(alpha_str, col_positions[3], yPos);
-                    yPos += 6;
-                });
-                
-                pdf.setFont('helvetica', 'normal');
-
-                for (let i = 0; i < analysisResults.length; i++) {
-                    pdf.addPage();
-                    yPos = margin;
-                    const result = analysisResults[i];
-
-                    pdf.setFontSize(16).text(`Dataset Analysis: ${formatTimestamp(result.timestamp)}`, pageWidth / 2, yPos, { align: 'center' });
-                    yPos += 12;
-
-                    pdf.setFontSize(12).text("Parameters & Results", margin, yPos);
-                    yPos += 6;
-                    pdf.setLineWidth(0.2).line(margin, yPos, pageWidth - margin, yPos);
-                    yPos += 8;
-                    pdf.setFontSize(9);
-
-                    const col1_x = margin;
-                    const col2_x = margin + (pageWidth - 2 * margin) / 2;
-                    let yPos_col1 = yPos, yPos_col2 = yPos;
-                    const L_val_mm = parseFloat(document.getElementById('wire-length').value);
-                    const L_ppm = parseFloat(document.getElementById('esd-wire-length-ppm').value);
-                    const two_b_val_mm = parseFloat(document.getElementById('wire-width').value);
-                    const two_b_ppm = parseFloat(document.getElementById('esd-wire-width-ppm').value);
-                    const C0 = parseFloat(document.getElementById('tcr-c0').value);
-                    const C1 = parseFloat(document.getElementById('tcr-c1').value);
-                    const C2 = parseFloat(document.getElementById('tcr-c2').value);
-
-                    pdf.text(sanitizeForPDF(`Voltage Probe Distance (L): ${L_val_mm.toFixed(3)} ± ${(L_val_mm * L_ppm / 1e6).toExponential(1)} mm`), col1_x, yPos_col1); yPos_col1 += 6;
-                    pdf.text(sanitizeForPDF(`Wire Width (2b): ${two_b_val_mm.toFixed(3)} ± ${(two_b_val_mm * two_b_ppm / 1e6).toExponential(1)} mm`), col1_x, yPos_col1); yPos_col1 += 6;
-                    pdf.text(sanitizeForPDF(`Substrate Thickness (dₛ): ${document.getElementById('thickness-substrate').value} mm`), col1_x, yPos_col1); yPos_col1 += 6;
-                    pdf.text(`Fit Method: ${document.getElementById('fit-method').value}`, col1_x, yPos_col1); yPos_col1 += 6;
-                    pdf.text(`Fitting Range: ${result.minFitFreq.toFixed(2)} Hz to ${result.maxFitFreq.toFixed(2)} Hz`, col1_x, yPos_col1); yPos_col1 += 6;
-                    yPos_col1 += 4;
-                    pdf.text(sanitizeForPDF(`R(T) Coeffs: C₀=${C0.toExponential(2)}, C₁=${C1.toExponential(2)}, C₂=${C2.toExponential(2)}`), col1_x, yPos_col1); yPos_col1 += 6;
-
-                    pdf.text(sanitizeForPDF(`Avg Temperature: ${result.avg_temp > 0 ? result.avg_temp.toFixed(2) + ' K' : 'N/A'}`), col2_x, yPos_col2); yPos_col2 += 6;
-                    pdf.text(sanitizeForPDF(`Resistance (R₀): ${result.R0.toFixed(2)} ± ${result.esd_R0.toExponential(1)} Ω`), col2_x, yPos_col2); yPos_col2 += 6;
-                    pdf.text(sanitizeForPDF(`Local TCR (α): ${!isNaN(result.local_tcr) ? result.local_tcr.toExponential(2) : 'N/A'} 1/K`), col2_x, yPos_col2); yPos_col2 += 6;
-                    const max_power_text_pdf = !isNaN(result.maxPowerPerLength) ? `${result.maxPowerPerLength.toFixed(2)} W/m` : 'N/A';
-                    pdf.text(sanitizeForPDF(`Max Power: ${max_power_text_pdf}`), col2_x, yPos_col2); yPos_col2 += 6;
-                    const k_text_pdf = !isNaN(result.k) ? `${result.k.toExponential(3)} ± ${result.esd_k.toExponential(1)} W/mK` : 'N/A';
-                    pdf.text(sanitizeForPDF(`Thermal Conductivity (k): ${k_text_pdf}`), col2_x, yPos_col2); yPos_col2 += 6;
-                    const alpha_text_pdf = !isNaN(result.alpha) ? `${result.alpha.toExponential(3)} ± ${result.esd_alpha.toExponential(1)} mm²/s` : 'N/A';
-                    pdf.text(sanitizeForPDF(`Thermal Diffusivity (α): ${alpha_text_pdf}`), col2_x, yPos_col2); yPos_col2 += 6;
-                    
-                    if (!isNaN(result.f_min_linearity) && !isNaN(result.f_max_linearity)) {
-                        const f_max_formatted = result.f_max_linearity > 1000 ? `${(result.f_max_linearity/1000).toFixed(1)} kHz` : `${result.f_max_linearity.toFixed(1)} Hz`;
-                        pdf.text(sanitizeForPDF(`Rec. Fit Range: ${result.f_min_linearity.toFixed(1)} Hz - ${f_max_formatted}`), col2_x, yPos_col2); yPos_col2 += 6;
-                    }
-
-                    yPos = Math.max(yPos_col1, yPos_col2) + 5;
-                    selectedDatasetIndex = i;
-                    
-                    isShowingRTPlot = false;
-                    updateVisualization();
-                    await new Promise(resolve => setTimeout(resolve, 50));
-                    
-                    const plotDiv = document.getElementById('plot-container');
-                    const imgData = await Plotly.toImage(plotDiv, {
-                        format: 'png', 
-                        width: 1000,
-                        height: 750
-                    });
-
-                    const availableHeight = pageHeight - yPos - margin;
-                    let imgWidth = pageWidth - 2 * margin;
-                    let imgHeight = (750 * imgWidth) / 1000; 
-
-                    if (imgHeight > availableHeight) {
-                        imgHeight = availableHeight;
-                        imgWidth = (1000 * imgHeight) / 750;
-                    }
-                    pdf.addImage(imgData, 'PNG', (pageWidth - imgWidth) / 2, yPos, imgWidth, imgHeight);
-                }
-
-                if (analysisResults.length > 0) {
-                    pdf.addPage();
-                    yPos = margin;
-                    pdf.setFontSize(16).text("Analysis Summary", pageWidth / 2, yPos, { align: 'center' });
-                    yPos += 10;
-                    
-                    tempPlotContainer.html(''); 
-                    drawSummaryPlot(analysisResults, tempPlotContainer);
-                    await new Promise(resolve => setTimeout(resolve, 300));
-                    let canvas1 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
-                    let imgWidth1 = pageWidth - 2 * margin;
-                    if (canvas1.height > 20) {
-                        let imgHeight1 = (canvas1.height * imgWidth1) / canvas1.width;
-                        pdf.addImage(canvas1.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight1);
-                        yPos += imgHeight1 + 10;
-                    }
-
-                    const temps = analysisResults.map(d => d.avg_temp).filter(t => t > 0);
-                    if (new Set(temps).size > 1) {
-                        
-                        tempPlotContainer.html('');
-                        drawRvTPlot(analysisResults, tempPlotContainer);
-                        await new Promise(resolve => setTimeout(resolve, 300));
-                        const canvas2 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
-                        if (canvas2.height > 20) {
-                            const imgHeight2 = (canvas2.height * imgWidth1) / canvas2.width;
-                            if (yPos + imgHeight2 > pageHeight - margin) { pdf.addPage(); yPos = margin; }
-                            pdf.addImage(canvas2.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight2);
-                            yPos += imgHeight2 + 10;
-                        }
-                        
-                        tempPlotContainer.html('');
-                        drawConductivityVsTempPlot(analysisResults, tempPlotContainer);
-                        await new Promise(resolve => setTimeout(resolve, 300));
-                        let canvas3 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
-                        if (canvas3.height > 20) {
-                            let imgHeight3 = (canvas3.height * imgWidth1) / canvas3.width;
-                            if (yPos + imgHeight3 > pageHeight - margin) { pdf.addPage(); yPos = margin; }
-                            pdf.addImage(canvas3.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight3);
-                            yPos += imgHeight3 + 10;
-                        }
-
-                        tempPlotContainer.html('');
-                        drawDiffusivityVsTempPlot(analysisResults, tempPlotContainer);
-                        await new Promise(resolve => setTimeout(resolve, 300));
-                        let canvas4 = await html2canvas(tempPlotContainer.node(), { scale: 2, backgroundColor: '#ffffff' });
-                        if (canvas4.height > 20) {
-                            let imgHeight4 = (canvas4.height * imgWidth1) / canvas4.width;
-                             if (yPos + imgHeight4 > pageHeight - margin) { pdf.addPage(); yPos = margin; }
-                            pdf.addImage(canvas4.toDataURL('image/png'), 'PNG', margin, yPos, imgWidth1, imgHeight4);
-                        }
-                    }
-                }
-                pdf.save(`3omega_3D-Fit-report_${new Date().toISOString().replace(/[:.]/g, '-')}.pdf`);
-            } catch (error) {
-                console.error("Error generating PDF:", error);
-                showError("An error occurred while generating the PDF. See browser console.");
-            } finally {
-                // --- Reset cursor to normal ---
-                document.body.style.cursor = 'default';
-                selectedDatasetIndex = originalSelectedDatasetIndex;
-                if (document.getElementById('dataset-selector')) document.getElementById('dataset-selector').value = selectedDatasetIndex;
-                isShowingRTPlot = false;
-                updateVisualization();
-                tempPlotContainer.html('');
-                btn.textContent = 'Save Report';
-                btn.disabled = false;
-            }
-        }
-
-        const resizer = document.getElementById('drag-handle');
-        const leftPanel = document.getElementById('controls-panel');
-        let isResizing = false;
-        resizer.addEventListener('mousedown', e => { e.preventDefault(); isResizing = true; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; window.addEventListener('mousemove', handleMouseMove); window.addEventListener('mouseup', stopResize); });
-        function handleMouseMove(e) { 
-            if (!isResizing) return; 
-            const newLeftWidth = e.clientX - resizer.parentElement.getBoundingClientRect().left; 
-            const minW = parseInt(leftPanel.style.minWidth, 10) || 350;
-            const maxW = parseInt(leftPanel.style.maxWidth, 10) || 600;
-            if (newLeftWidth > minW && newLeftWidth < maxW) { 
-                leftPanel.style.width = `${newLeftWidth}px`; 
-                try{ if (document.getElementById('plot-container')) Plotly.relayout('plot-container', {autosize: true}); } catch(e){} 
-            } 
-        }
-        function stopResize() { isResizing = false; document.body.style.cursor = 'default'; document.body.style.userSelect = 'auto'; window.removeEventListener('mousemove', handleMouseMove); window.removeEventListener('mouseup', stopResize); }
-        if (document.getElementById('plot-container')) {
-             new ResizeObserver(() => { if (analysisResults.length > 0) { try{ Plotly.relayout('plot-container', {autosize: true}); } catch(e){} } }).observe(document.getElementById('plot-container'));
-        }
-    });
 </script>
 </body>
 </html>
