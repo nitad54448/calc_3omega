@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3-Omega Surface Fit — v4.0.2</title>
+    <title>3-Omega Surface Fit — v4.0.3</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -354,7 +354,7 @@
                 <div id="recommended-fit-range-container"></div>
             </div>
 
-<p class="help">The fitting method applies to all datasets. Frequency limits are per dataset unless Global is selected. Robust uncertainties use approximate conditional weighted covariance, inflated for excess scatter.</p></section>
+<p class="help">Model: uniform heating across width 2b, with strip-averaged temperature. Diffusivity uses the corresponding logarithmic intercept constant. Recommended frequency limits are geometric estimates, not a verified accuracy guarantee. The fitting method applies to all datasets. Frequency limits are per dataset unless Global is selected. Robust uncertainties use approximate conditional weighted covariance, inflated for excess scatter.</p></section>
 <section role="tabpanel" id="analysis-tab" aria-labelledby="tab-analysis" hidden><div id="results-container"><div id="single-result-card-container"></div></div><button id="save-report-btn" class="hidden">Save Report</button><p class="help">Uncertainties are 1σ. Calibration and voltage-fit errors are assumed independent. Current, temperature, and model systematic uncertainties are not included.</p></section>
         </div>
         <div id="drag-handle"></div>
@@ -363,7 +363,7 @@
         </div>
     </div>
     <footer>
-        <span>NitaD, Univ Paris-Saclay, v4.0.2, 13 September 2026</span>
+        <span>NitaD, Univ Paris-Saclay, v4.0.3, 14 September 2026</span>
 
     </footer>
     <div id="pdf-plot-temp-container"></div>
@@ -514,7 +514,9 @@ function analyzeAndDisplay(){
  const k=p.R*p.D/(4*Math.PI*L*q1);if(!finite(k)||k<=0)throw Error('Nonpositive conductivity: check calibration and phase correction.');
  const varRD=Math.max(0,p.D**2*p.varR+p.R**2*p.varD+2*p.R*p.D*p.covRD);
  const esdK=Math.sqrt(varRD/(4*Math.PI*L*q1)**2+k*k*(eL**2+C[0][0]/q1**2));
- const alpha=b*b*Math.exp(0.5772156649015329)/8*Math.exp(p2)*1e6;
+ // Uniform-strip, width-averaged low-frequency model:
+ // p2 = ln(D/b²) + 3 - 2*EulerGamma. D is converted from m²/s to mm²/s.
+ const alpha=Math.exp(2*Math.log(b)+p2-3+2*0.5772156649015329+Math.log(1e6));
  const esdAlpha=alpha*Math.sqrt(4*eb**2+varP2);
  if(![alpha,esdAlpha,esdK].every(finite)||alpha<=0)throw Error('Derived properties overflow or are nonphysical; revise the fit.');
  Object.assign(r,{fitParams:{p1:q1,p2},k,esd_k:esdK,alpha,esd_alpha:esdAlpha,f_min_linearity:16*(alpha/1e6)/(4*Math.PI*ds*ds),f_max_linearity:(alpha/1e6)/(Math.PI*b*b)});
@@ -890,9 +892,10 @@ async function exportPDFReport(){
  const pdf=new window.jspdf.jsPDF({unit:'mm',format:'a4'});let y=20;
  const line=(text,size=10)=>{pdf.setFontSize(size);const lines=pdf.splitTextToSize(sanitizeForPDF(String(text)).replace(/²/g,'2').replace(/σ/g,'sigma').replace(/⁻¹/g,'^-1').replace(/·/g,' '),180);for(const l of lines){if(y>277){pdf.addPage();y=20;}pdf.text(l,15,y);y+=size*.45+2;}};
  const page=title=>{pdf.addPage();y=20;line(title,16);y+=4;};
- line('3-Omega Analysis Report',20);line('Version 4.0.2 | 13 September 2026');line('File: '+$('file-name-display').textContent);line('Generated: '+new Date().toISOString());
+ line('3-Omega Analysis Report',20);line('Version 4.0.3 | 14 September 2026');line('File: '+$('file-name-display').textContent);line('Generated: '+new Date().toISOString());
  line('Resistance source: '+(calibration?calibration.source:'Manual coefficients (independent uncertainties)'));
  line('All errors are 1 sigma. Predicted resistance and derivative covariance are propagated into conductivity. Calibration and voltage-fit errors are assumed independent. Current, temperature and model systematics are not included. Robust errors are approximate conditional weighted errors, inflated for excess scatter.');
+ line('Uniform-strip model: D = b^2 exp(p2 - 3 + 2 EulerGamma). Recommended ranges are geometric estimates.');
  line('Phase correction: '+($('phase-shift-180').checked?'180 degrees':'none'));
  line('Geometry: L='+num('wire-length')+' mm (+/- '+num('esd-wire-length-ppm')+' ppm); width='+num('wire-width')+' mm (+/- '+num('esd-wire-width-ppm')+' ppm); substrate='+num('thickness-substrate')+' mm.');
  for(let i=0;i<3;i++)line(`C${i}: ${$('tcr-c'+i).value} +/- ${$('tcr-s'+i).value}`);
@@ -914,7 +917,7 @@ async function exportPDFReport(){
  }
  const charts=[['Result summary',drawSummaryPlot],['Measured resistance and calibration',drawRvTPlot],['Conductivity vs temperature',drawConductivityVsTempPlot],['Diffusivity vs temperature',drawDiffusivityVsTempPlot]];
  for(const [title,draw] of charts){temp.html('');draw(analysisResults,temp);if(!temp.select('svg').node())continue;await new Promise(requestAnimationFrame);const canvas=await html2canvas(temp.node(),{scale:2,backgroundColor:'#ffffff'});page(title);pdf.addImage(canvas.toDataURL('image/png'),'PNG',15,y,180,90);}
- pdf.save('3omega-v4.0.2-report-'+new Date().toISOString().replace(/[:.]/g,'-')+'.pdf');
+ pdf.save('3omega-v4.0.3-report-'+new Date().toISOString().replace(/[:.]/g,'-')+'.pdf');
  }catch(e){console.error(e);showError('Report generation failed: '+e.message);}finally{selectedDatasetIndex=original;isShowingRTPlot=originalView;temp.html('');exporting=false;controls.forEach((e,i)=>e.disabled=disabled[i]);$('save-report-btn').textContent='Save Report';document.body.style.cursor='default';renderResultsUI();updateVisualization();}
 }
 $('file-upload').addEventListener('change',handleFileSelect);
