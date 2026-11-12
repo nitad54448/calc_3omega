@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3-Omega Surface Fit — v4.0.3</title>
+    <title>3-Omega Surface Fit — v4.0.4</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -363,7 +363,7 @@
         </div>
     </div>
     <footer>
-        <span>NitaD, Univ Paris-Saclay, v4.0.3, 14 September 2026</span>
+        <span>NitaD, Univ Paris-Saclay, v4.0.4, 12 November 2026</span>
 
     </footer>
     <div id="pdf-plot-temp-container"></div>
@@ -550,10 +550,15 @@ function setupFittingSliders(){
 function parseData(text){
  let jsonHeader=null,startTime=null;const first=text.indexOf('{');
  if(first>=0){let depth=0,quoted=false,escape=false;for(let i=first;i<text.length;i++){const c=text[i];if(quoted){if(escape)escape=false;else if(c==='\\')escape=true;else if(c==='"')quoted=false;}else if(c==='"')quoted=true;else if(c==='{')depth++;else if(c==='}'&&--depth===0){try{jsonHeader=JSON.parse(text.slice(first,i+1));const t=new Date(jsonHeader['start time']);if(finite(t.getTime()))startTime=t;}catch(e){}break;}}}
+ if(jsonHeader?.data_format && jsonHeader.data_format!=='3omega-measurements-v1')throw Error('Unsupported measurement format: '+jsonHeader.data_format);
+ if(jsonHeader?.conversion_source && !jsonHeader.data_format)throw Error('This file uses the old converter format, which has no temperature or validity column. Reconvert it with convert_3omega v1.0.1 or later.');
  const datasets=[];let skipped=0;
  for(const block of text.split('***')){let active=false,R0=NaN,esd_R0=NaN,firstTime=null;const data=[],temps=[];
  for(const line of block.split(/\r?\n/)){const t=line.trim();if(t.startsWith('--- > R0 :')){const vals=t.slice(t.indexOf(':')+1).trim().split(/\s+/).map(Number).filter(v=>finite(v)&&v>0);if(vals.length){R0=d3.mean(vals);esd_R0=Math.max(d3.deviation(vals)||0,R0*100e-6);}}
- if(t.startsWith('time /sec')){active=true;continue;}if(t.startsWith('--- >')){active=false;continue;}if(!active||!t)continue;
+ if(t.startsWith('time /sec')){
+  if(/Phase3\s*\/deg/i.test(t))throw Error('The Phase3 column is not a validity flag. Reconvert this file with convert_3omega v1.0.1 or later.');
+  active=true;continue;
+ }if(t.startsWith('--- >')){active=false;continue;}if(!active||!t)continue;
  const v=t.split(/\s+/).map(Number);if(v.length<11||![0,2,3,6,7,8,9,10].every(i=>finite(v[i]))||v[2]<=0||v[3]<=0||v[7]<0||v[9]<0){skipped++;continue;}
  const current=v[2]*1e-3/Math.sqrt(2),i_cubed=current**3;if(!finite(i_cubed)||i_cubed<=0){skipped++;continue;}
  if(firstTime===null)firstTime=v[0];if(v[10]===1&&finite(v[1])&&v[1]>0)temps.push(v[1]);
@@ -892,7 +897,7 @@ async function exportPDFReport(){
  const pdf=new window.jspdf.jsPDF({unit:'mm',format:'a4'});let y=20;
  const line=(text,size=10)=>{pdf.setFontSize(size);const lines=pdf.splitTextToSize(sanitizeForPDF(String(text)).replace(/²/g,'2').replace(/σ/g,'sigma').replace(/⁻¹/g,'^-1').replace(/·/g,' '),180);for(const l of lines){if(y>277){pdf.addPage();y=20;}pdf.text(l,15,y);y+=size*.45+2;}};
  const page=title=>{pdf.addPage();y=20;line(title,16);y+=4;};
- line('3-Omega Analysis Report',20);line('Version 4.0.3 | 14 September 2026');line('File: '+$('file-name-display').textContent);line('Generated: '+new Date().toISOString());
+ line('3-Omega Analysis Report',20);line('Version 4.0.4 | 12 November 2026');line('File: '+$('file-name-display').textContent);line('Generated: '+new Date().toISOString());
  line('Resistance source: '+(calibration?calibration.source:'Manual coefficients (independent uncertainties)'));
  line('All errors are 1 sigma. Predicted resistance and derivative covariance are propagated into conductivity. Calibration and voltage-fit errors are assumed independent. Current, temperature and model systematics are not included. Robust errors are approximate conditional weighted errors, inflated for excess scatter.');
  line('Uniform-strip model: D = b^2 exp(p2 - 3 + 2 EulerGamma). Recommended ranges are geometric estimates.');
@@ -917,7 +922,7 @@ async function exportPDFReport(){
  }
  const charts=[['Result summary',drawSummaryPlot],['Measured resistance and calibration',drawRvTPlot],['Conductivity vs temperature',drawConductivityVsTempPlot],['Diffusivity vs temperature',drawDiffusivityVsTempPlot]];
  for(const [title,draw] of charts){temp.html('');draw(analysisResults,temp);if(!temp.select('svg').node())continue;await new Promise(requestAnimationFrame);const canvas=await html2canvas(temp.node(),{scale:2,backgroundColor:'#ffffff'});page(title);pdf.addImage(canvas.toDataURL('image/png'),'PNG',15,y,180,90);}
- pdf.save('3omega-v4.0.3-report-'+new Date().toISOString().replace(/[:.]/g,'-')+'.pdf');
+ pdf.save('3omega-v4.0.4-report-'+new Date().toISOString().replace(/[:.]/g,'-')+'.pdf');
  }catch(e){console.error(e);showError('Report generation failed: '+e.message);}finally{selectedDatasetIndex=original;isShowingRTPlot=originalView;temp.html('');exporting=false;controls.forEach((e,i)=>e.disabled=disabled[i]);$('save-report-btn').textContent='Save Report';document.body.style.cursor='default';renderResultsUI();updateVisualization();}
 }
 $('file-upload').addEventListener('change',handleFileSelect);

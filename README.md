@@ -114,3 +114,20 @@ The "Save Report" button generates a comprehensive, multi-page PDF document summ
     -   Resistance vs. Temperature
     -   Thermal Conductivity vs. Temperature
     -   Thermal Diffusivity vs. Temperature
+
+
+## Version 4.0.4 (package 1.0.1)
+
+Review issue 6: imports support the explicit [shared measurement format](DATA_FORMAT.md)
+produced by convert_3omega v1.0.1. Old converter exports are rejected with a
+reconversion message because they have no temperature or validity column.
+Existing instrument files remain supported. Current is peak mA on input and is
+converted to RMS A exactly once; third-harmonic voltages are already RMS V.
+A single converted temperature requires manually supplied R(T) calibration
+coefficients and uncertainties, as automatic calibration requires at least two
+distinct temperatures.
+
+Run `npm test` with Node.js (no dependency installation required). Tests cover
+versioned imports, rejection of old converter formats, current units, validity,
+and all four bundled instrument files. The converter repository also contains
+a live converter-to-calculator round-trip test.
