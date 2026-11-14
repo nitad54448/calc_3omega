@@ -437,8 +437,8 @@
                         }
                         
                         const allFreqs = parsedFileContent.datasets.flatMap(ds => ds.data.map(d => d.freq));
-                        const globalMinFreq = Math.max(0.01, Math.min(...allFreqs));
-                        const globalMaxFreq = Math.max(...allFreqs);
+                        const globalMinFreq = Math.max(0.01, d3.min(allFreqs));
+                        const globalMaxFreq = d3.max(allFreqs);
                         
                         analysisResults = parsedFileContent.datasets.map(dataset => {
                             return { ...dataset, minFitFreq: globalMinFreq, maxFitFreq: globalMaxFreq };
@@ -466,8 +466,8 @@
 
     function setupFittingSliders() {
             const allFreqs = parsedFileContent.datasets.flatMap(ds => ds.data.map(d => d.freq));
-            const minFreq = Math.max(0.01, Math.min(...allFreqs));
-            const maxFreq = Math.max(...allFreqs);
+            const minFreq = Math.max(0.01, d3.min(allFreqs));
+            const maxFreq = d3.max(allFreqs);
 
             const logMin = Math.log(minFreq);
             const logMax = Math.log(maxFreq);
@@ -789,10 +789,9 @@
                         .map(d => ({ ...d, weight: d.esdV3 > 0 ? 1 / (d.esdV3 * d.esdV3) : 0 }));
                     
                     const uniqueFreqs = new Set(dataForFit.map(d => d.freq));
-                    const uniqueCurrents = new Set(dataForFit.map(d => d.i_cubed));
-                    if (dataForFit.length < 3 || uniqueFreqs.size < 2 || uniqueCurrents.size < 2) {
+                    if (dataForFit.length < 3 || uniqueFreqs.size < 2) {
                         result.fitParams = null;
-                        result.failReason = "Insufficient data variation (need at least 2 unique frequencies and currents).";
+                        result.failReason = "Insufficient data variation (need at least 3 points and 2 unique frequencies).";
                         return;
                     }
                     
@@ -818,7 +817,7 @@
                         const rel_err_p1_sq = Math.pow(esd_p1 / p1, 2);
                         esd_k = Math.abs(k) * Math.sqrt(rel_err_R_sq + rel_err_tcr_sq + rel_err_L_sq + rel_err_p1_sq);
 
-                        alpha_diff = (b * b * Math.exp(eulerGamma)) / 8 * Math.exp(p2);
+                        alpha_diff = (b * b * Math.exp(2 * eulerGamma - 3)) * Math.exp(p2);
                         esd_alpha_diff = Math.abs(alpha_diff) * Math.sqrt(4 * rel_err_two_b_sq + Math.pow(esd_p2, 2));
 
                         result.fitParams = { p1, p2 };

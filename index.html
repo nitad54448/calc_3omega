@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3-Omega Surface Fit — v4.0.4</title>
+    <title>3-Omega Surface Fit — v4.0.5</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -922,7 +922,7 @@ async function exportPDFReport(){
  }
  const charts=[['Result summary',drawSummaryPlot],['Measured resistance and calibration',drawRvTPlot],['Conductivity vs temperature',drawConductivityVsTempPlot],['Diffusivity vs temperature',drawDiffusivityVsTempPlot]];
  for(const [title,draw] of charts){temp.html('');draw(analysisResults,temp);if(!temp.select('svg').node())continue;await new Promise(requestAnimationFrame);const canvas=await html2canvas(temp.node(),{scale:2,backgroundColor:'#ffffff'});page(title);pdf.addImage(canvas.toDataURL('image/png'),'PNG',15,y,180,90);}
- pdf.save('3omega-v4.0.4-report-'+new Date().toISOString().replace(/[:.]/g,'-')+'.pdf');
+ pdf.save('3omega-v4.0.5-report-'+new Date().toISOString().replace(/[:.]/g,'-')+'.pdf');
  }catch(e){console.error(e);showError('Report generation failed: '+e.message);}finally{selectedDatasetIndex=original;isShowingRTPlot=originalView;temp.html('');exporting=false;controls.forEach((e,i)=>e.disabled=disabled[i]);$('save-report-btn').textContent='Save Report';document.body.style.cursor='default';renderResultsUI();updateVisualization();}
 }
 $('file-upload').addEventListener('change',handleFileSelect);

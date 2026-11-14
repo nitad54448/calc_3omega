@@ -452,8 +452,8 @@
                     }
                     
                     const allFreqs = parsedFileContent.datasets.flatMap(ds => ds.data.map(d => d.freq));
-                    const globalMinFreq = Math.max(0.01, Math.min(...allFreqs));
-                    const globalMaxFreq = Math.max(...allFreqs);
+                    const globalMinFreq = Math.max(0.01, d3.min(allFreqs));
+                    const globalMaxFreq = d3.max(allFreqs);
                     
                     analysisResults = parsedFileContent.datasets.map(dataset => {
                         const processedData = processDataWithInternalFit(dataset.data);
@@ -480,8 +480,8 @@
 
     function setupFittingSliders() {
             const allFreqs = parsedFileContent.datasets.flatMap(ds => ds.data.map(d => d.freq));
-            const minFreq = Math.max(0.01, Math.min(...allFreqs));
-            const maxFreq = Math.max(...allFreqs);
+            const minFreq = Math.max(0.01, d3.min(allFreqs));
+            const maxFreq = d3.max(allFreqs);
 
             const logMin = Math.log(minFreq);
             const logMax = Math.log(maxFreq);
@@ -809,7 +809,7 @@
                 const esd_S = inPhaseFit.esd_slope, esd_Ix = inPhaseFit.esd_intercept;
                 if (S !== 0) {
                     const eulerGamma = 0.5772156;
-                    alpha_diffusivity_m2s = (b * b * Math.exp(eulerGamma) / 8) * Math.exp(-Ix / S);
+                    alpha_diffusivity_m2s = (b * b * Math.exp(2 * eulerGamma - 3)) * Math.exp(-Ix / S);
                     if (esd_S > 0 && esd_Ix > 0) {
                         const rel_err_b_sq = Math.pow(rel_err_two_b, 2);
                         const term_err_Ix_sq = Math.pow(esd_Ix / S, 2);
